@@ -57,6 +57,7 @@
     <div class="calc">
         <button onclick="calc('add')">Add</button>
         <button onclick="calc('multiply')">Multiply</button>
+        <button onclick="benchmark()">Benchmark</button>
     </div>
     <div id="result"></div>
     <script>
@@ -80,6 +81,26 @@
             } catch (e) {
                 document.getElementById('result').textContent = 'Error: ' + e;
             }
+        }
+        async function benchmark() {
+            const el = document.getElementById('result');
+            el.textContent = 'Benchmarking...';
+            const duration = 3000;
+            const start = performance.now();
+            let count = 0;
+            while (performance.now() - start < duration) {
+                await fetch('/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cmd: ['/calculate.sh', '2', '3', 'add'] })
+                });
+                count++;
+                el.textContent = `Benchmarking... ${count} calls`;
+            }
+            const elapsed = (performance.now() - start) / 1000;
+            const rps = (count / elapsed).toFixed(1);
+            const avg = (elapsed / count * 1000).toFixed(1);
+            el.textContent = `${count} calls in ${elapsed.toFixed(1)}s — ${rps} req/s, ${avg}ms avg`;
         }
     </script>
 </body>
