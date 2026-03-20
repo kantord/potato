@@ -8,7 +8,7 @@ axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 tower = "0.5"
-bollard = "0.18"
+bollard = "0.20"
 futures-util = "0.3"
 
 [dev-dependencies]
