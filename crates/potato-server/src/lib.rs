@@ -1,14 +1,15 @@
 use axum::{Json, Router, extract::State, routing::post};
 use bollard::Docker;
+use bollard::exec::{CreateExecOptions, StartExecResults};
 use bollard::models::ContainerCreateBody;
-use bollard::query_parameters::{CreateContainerOptions, LogsOptions, RemoveContainerOptions};
+use bollard::query_parameters::{CreateContainerOptions, RemoveContainerOptions};
 use futures_util::StreamExt;
 use std::path::PathBuf;
 use tower_http::services::ServeDir;
 
 #[derive(Clone)]
 struct AppState {
-    image: String,
+    container_id: String,
 }
 
 #[derive(serde::Deserialize)]
@@ -22,55 +23,66 @@ async fn run_command(State(state): State<AppState>, Json(body): Json<RunRequest>
         Err(e) => return format!("error connecting to docker: {e}\n"),
     };
 
+    let exec = match docker
+        .create_exec(
+            &state.container_id,
+            CreateExecOptions {
+                cmd: Some(body.cmd),
+                attach_stdout: Some(true),
+                attach_stderr: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+    {
+        Ok(e) => e,
+        Err(e) => return format!("error creating exec: {e}\n"),
+    };
+
+    match docker.start_exec(&exec.id, None).await {
+        Ok(StartExecResults::Attached { mut output, .. }) => {
+            let mut result = String::new();
+            while let Some(Ok(log)) = output.next().await {
+                result.push_str(&log.to_string());
+            }
+            result
+        }
+        Ok(StartExecResults::Detached) => String::new(),
+        Err(e) => format!("error running exec: {e}\n"),
+    }
+}
+
+pub async fn start_container(image: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let docker = Docker::connect_with_local_defaults()?;
+
     let config = ContainerCreateBody {
-        image: Some(state.image),
-        cmd: Some(body.cmd),
+        image: Some(image.to_string()),
+        cmd: Some(vec!["sleep".to_string(), "infinity".to_string()]),
         ..Default::default()
     };
 
     let name = format!("potato-{}", uuid());
-    let container = match docker
+    let container = docker
         .create_container(
             Some(CreateContainerOptions { name: Some(name), ..Default::default() }),
             config,
         )
-        .await
-    {
-        Ok(c) => c,
-        Err(e) => return format!("error creating container: {e}\n"),
-    };
+        .await?;
 
-    if let Err(e) = docker.start_container(&container.id, None).await {
-        let _ = docker.remove_container(&container.id, None).await;
-        return format!("error starting container: {e}\n");
+    docker.start_container(&container.id, None).await?;
+
+    Ok(container.id)
+}
+
+pub async fn stop_container(container_id: &str) {
+    if let Ok(docker) = Docker::connect_with_local_defaults() {
+        let _ = docker
+            .remove_container(
+                container_id,
+                Some(RemoveContainerOptions { force: true, ..Default::default() }),
+            )
+            .await;
     }
-
-    let wait = docker.wait_container(&container.id, None);
-    let _: Vec<_> = wait.collect().await;
-
-    let mut output = String::new();
-    let mut logs = docker.logs(
-        &container.id,
-        Some(LogsOptions {
-            follow: false,
-            stdout: true,
-            stderr: true,
-            ..Default::default()
-        }),
-    );
-
-    while let Some(Ok(log)) = logs.next().await {
-        output.push_str(&log.to_string());
-    }
-
-    let _ = docker
-        .remove_container(
-            &container.id,
-            Some(RemoveContainerOptions { force: true, ..Default::default() }),
-        )
-        .await;
-
-    output
 }
 
 pub async fn extract_image(image: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
@@ -118,8 +130,8 @@ fn uuid() -> String {
     format!("{n:x}")
 }
 
-pub fn app(static_dir: PathBuf, image: String) -> Router {
-    let state = AppState { image };
+pub fn app(static_dir: PathBuf, container_id: String) -> Router {
+    let state = AppState { container_id };
     Router::new()
         .route("/run", post(run_command))
         .nest_service("/files", ServeDir::new(static_dir))

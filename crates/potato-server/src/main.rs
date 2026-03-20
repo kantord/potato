@@ -12,9 +12,19 @@ async fn main() {
         .expect("failed to extract image");
     println!("Extracted to {}", static_dir.display());
 
+    println!("Starting container...");
+    let container_id = potato_server::start_container(image)
+        .await
+        .expect("failed to start container");
+    println!("Container {container_id} running");
+
     let listener = UnixListener::bind(path).unwrap();
     println!("Listening on {path}");
-    axum::serve(listener, potato_server::app(static_dir, image.to_string()))
-        .await
-        .unwrap();
+
+    let result = axum::serve(listener, potato_server::app(static_dir, container_id.clone())).await;
+
+    println!("Stopping container...");
+    potato_server::stop_container(&container_id).await;
+
+    result.unwrap();
 }
