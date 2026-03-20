@@ -711,6 +711,8 @@ dependencies = [
  "axum",
  "bollard",
  "futures-util",
+ "http-body-util",
+ "hyper",
  "hyper-util",
  "tokio",
  "tower",

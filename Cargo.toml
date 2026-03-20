@@ -10,3 +10,8 @@ hyper-util = { version = "0.1", features = ["tokio"] }
 tower = "0.5"
 bollard = "0.18"
 futures-util = "0.3"
+
+[dev-dependencies]
+hyper = "1"
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }
