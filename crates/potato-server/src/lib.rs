@@ -1,10 +1,15 @@
+use axum::response::sse::{Event, Sse};
 use axum::{Json, Router, extract::State, routing::post};
 use bollard::Docker;
+use bollard::container::LogOutput;
 use bollard::exec::{CreateExecOptions, StartExecResults};
 use bollard::models::ContainerCreateBody;
 use bollard::query_parameters::{CreateContainerOptions, RemoveContainerOptions};
-use futures_util::StreamExt;
+use futures_util::{Stream, StreamExt};
+use std::convert::Infallible;
 use std::path::PathBuf;
+use tokio::io::AsyncWriteExt;
+use tokio_stream::wrappers::ReceiverStream;
 use tower_http::services::ServeDir;
 
 #[derive(Clone)]
@@ -15,41 +20,110 @@ struct AppState {
 #[derive(serde::Deserialize)]
 struct RunRequest {
     cmd: Vec<String>,
+    #[serde(default)]
+    stdin: Option<serde_json::Value>,
 }
 
-async fn run_command(State(state): State<AppState>, Json(body): Json<RunRequest>) -> String {
-    let docker = match Docker::connect_with_local_defaults() {
-        Ok(d) => d,
-        Err(e) => return format!("error connecting to docker: {e}\n"),
-    };
-
-    let exec = match docker
-        .create_exec(
-            &state.container_id,
-            CreateExecOptions {
-                cmd: Some(body.cmd),
-                attach_stdout: Some(true),
-                attach_stderr: Some(true),
-                ..Default::default()
-            },
-        )
-        .await
-    {
-        Ok(e) => e,
-        Err(e) => return format!("error creating exec: {e}\n"),
-    };
-
-    match docker.start_exec(&exec.id, None).await {
-        Ok(StartExecResults::Attached { mut output, .. }) => {
-            let mut result = String::new();
-            while let Some(Ok(log)) = output.next().await {
-                result.push_str(&log.to_string());
-            }
-            result
+fn tag_line(line: &str, default_event: &str) -> String {
+    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(line) {
+        if parsed.get("event").is_some() {
+            // Already tagged, pass through
+            return serde_json::to_string(&parsed).unwrap_or_else(|_| line.to_string());
         }
-        Ok(StartExecResults::Detached) => String::new(),
-        Err(e) => format!("error running exec: {e}\n"),
+        // JSON without event tag — wrap it
+        let tagged = serde_json::json!({
+            "event": default_event,
+            "data": parsed,
+        });
+        serde_json::to_string(&tagged).unwrap()
+    } else {
+        // Plain text — wrap it
+        let tagged = serde_json::json!({
+            "event": default_event,
+            "data": line,
+        });
+        serde_json::to_string(&tagged).unwrap()
     }
+}
+
+async fn run_command(
+    State(state): State<AppState>,
+    Json(body): Json<RunRequest>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let (tx, rx) = tokio::sync::mpsc::channel::<Result<Event, Infallible>>(32);
+
+    tokio::spawn(async move {
+        let docker = match Docker::connect_with_local_defaults() {
+            Ok(d) => d,
+            Err(e) => {
+                let msg = tag_line(&format!("failed to connect to docker: {e}"), "error");
+                let _ = tx.send(Ok(Event::default().data(msg))).await;
+                return;
+            }
+        };
+
+        let exec = match docker
+            .create_exec(
+                &state.container_id,
+                CreateExecOptions {
+                    cmd: Some(body.cmd),
+                    attach_stdout: Some(true),
+                    attach_stderr: Some(true),
+                    attach_stdin: Some(body.stdin.is_some()),
+                    ..Default::default()
+                },
+            )
+            .await
+        {
+            Ok(e) => e,
+            Err(e) => {
+                let msg = tag_line(&format!("failed to create exec: {e}"), "error");
+                let _ = tx.send(Ok(Event::default().data(msg))).await;
+                return;
+            }
+        };
+
+        match docker.start_exec(&exec.id, None).await {
+            Ok(StartExecResults::Attached { mut output, mut input }) => {
+                // Write stdin if provided
+                if let Some(stdin_data) = body.stdin {
+                    let stdin_str = serde_json::to_string(&stdin_data).unwrap() + "\n";
+                    let _ = input.write_all(stdin_str.as_bytes()).await;
+                    let _ = input.shutdown().await;
+                }
+                drop(input);
+
+                while let Some(Ok(log)) = output.next().await {
+                    let (text, default_event) = match &log {
+                        LogOutput::StdOut { message } => {
+                            (String::from_utf8_lossy(message).to_string(), "output")
+                        }
+                        LogOutput::StdErr { message } => {
+                            (String::from_utf8_lossy(message).to_string(), "error")
+                        }
+                        _ => continue,
+                    };
+
+                    for line in text.lines() {
+                        if line.is_empty() {
+                            continue;
+                        }
+                        let tagged = tag_line(line, default_event);
+                        if tx.send(Ok(Event::default().data(tagged))).await.is_err() {
+                            return;
+                        }
+                    }
+                }
+            }
+            Ok(StartExecResults::Detached) => {}
+            Err(e) => {
+                let msg = tag_line(&format!("failed to start exec: {e}"), "error");
+                let _ = tx.send(Ok(Event::default().data(msg))).await;
+            }
+        }
+    });
+
+    Sse::new(ReceiverStream::new(rx))
 }
 
 pub async fn start_container(image: &str) -> Result<String, Box<dyn std::error::Error>> {

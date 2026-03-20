@@ -1,14 +1,15 @@
 #!/bin/sh
-a=$1
-b=$2
-op=$3
+read input
+a=$(echo "$input" | sed 's/.*"a":\([0-9.]*\).*/\1/')
+b=$(echo "$input" | sed 's/.*"b":\([0-9.]*\).*/\1/')
+op=$(echo "$input" | sed 's/.*"op":"\([^"]*\)".*/\1/')
 
 if [ "$op" = "add" ]; then
     result=$(echo "$a + $b" | bc -l)
 elif [ "$op" = "multiply" ]; then
     result=$(echo "$a * $b" | bc -l)
 else
-    echo "{\"error\":\"unknown op: $op\"}"
+    echo "{\"event\":\"error\",\"data\":\"unknown op: $op\"}"
     exit 1
 fi
 

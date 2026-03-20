@@ -12,8 +12,18 @@ async fn test_app() -> axum::Router {
     potato_server::app(dir, container_id)
 }
 
+fn parse_sse_events(body: &str) -> Vec<serde_json::Value> {
+    body.lines()
+        .filter(|line| line.starts_with("data:"))
+        .filter_map(|line| {
+            let json = line.strip_prefix("data:")?.trim();
+            serde_json::from_str(json).ok()
+        })
+        .collect()
+}
+
 #[tokio::test]
-async fn run_date_returns_output() {
+async fn run_date_returns_sse_output() {
     let app = test_app().await;
 
     let response = app
@@ -30,11 +40,37 @@ async fn run_date_returns_output() {
 
     let body = response.into_body().collect().await.unwrap().to_bytes();
     let text = String::from_utf8(body.to_vec()).unwrap();
-    assert!(!text.is_empty(), "expected date output, got empty string");
+    let events = parse_sse_events(&text);
+    assert!(!events.is_empty(), "expected SSE events, got: {text}");
+    assert_eq!(events[0]["event"], "output");
 }
 
 #[tokio::test]
-async fn run_nonexistent_command_returns_error() {
+async fn run_with_stdin() {
+    let app = test_app().await;
+
+    let response = app
+        .oneshot(
+            Request::post("/run")
+                .header("Content-Type", "application/json")
+                .body(Body::from(r#"{"cmd":["cat"],"stdin":{"hello":"world"}}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let text = String::from_utf8(body.to_vec()).unwrap();
+    let events = parse_sse_events(&text);
+    assert!(!events.is_empty(), "expected SSE events, got: {text}");
+    assert_eq!(events[0]["event"], "output");
+    assert_eq!(events[0]["data"]["hello"], "world");
+}
+
+#[tokio::test]
+async fn run_stderr_tagged_as_error() {
     let app = test_app().await;
 
     let response = app
@@ -42,7 +78,7 @@ async fn run_nonexistent_command_returns_error() {
             Request::post("/run")
                 .header("Content-Type", "application/json")
                 .body(Body::from(
-                    r#"{"cmd":["nonexistent_command_that_does_not_exist_abc123"]}"#,
+                    r#"{"cmd":["sh","-c","echo oops >&2"]}"#,
                 ))
                 .unwrap(),
         )
@@ -53,21 +89,22 @@ async fn run_nonexistent_command_returns_error() {
 
     let body = response.into_body().collect().await.unwrap().to_bytes();
     let text = String::from_utf8(body.to_vec()).unwrap();
-    assert!(
-        text.contains("error") || text.contains("not found") || text.contains("No such file"),
-        "expected error message, got: {text}"
-    );
+    let events = parse_sse_events(&text);
+    assert!(!events.is_empty(), "expected SSE events, got: {text}");
+    assert_eq!(events[0]["event"], "error");
 }
 
 #[tokio::test]
-async fn run_echo_returns_output() {
+async fn run_pretagged_event_passed_through() {
     let app = test_app().await;
 
     let response = app
         .oneshot(
             Request::post("/run")
                 .header("Content-Type", "application/json")
-                .body(Body::from(r#"{"cmd":["echo","hello"]}"#))
+                .body(Body::from(
+                    r#"{"cmd":["echo","{\"event\":\"progress\",\"data\":{\"percent\":50}}"]}"#,
+                ))
                 .unwrap(),
         )
         .await
@@ -77,7 +114,10 @@ async fn run_echo_returns_output() {
 
     let body = response.into_body().collect().await.unwrap().to_bytes();
     let text = String::from_utf8(body.to_vec()).unwrap();
-    assert!(text.contains("hello"));
+    let events = parse_sse_events(&text);
+    assert!(!events.is_empty(), "expected SSE events, got: {text}");
+    assert_eq!(events[0]["event"], "progress");
+    assert_eq!(events[0]["data"]["percent"], 50);
 }
 
 #[tokio::test]

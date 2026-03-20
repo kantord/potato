@@ -2,6 +2,45 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+async function runCommand(
+  cmd: string[],
+  stdin: unknown,
+  onEvent: (event: string, data: unknown) => void
+): Promise<void> {
+  const res = await fetch("/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cmd, stdin }),
+  });
+
+  const reader = res.body?.getReader();
+  if (!reader) return;
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data:")) continue;
+      const json = line.slice(5).trim();
+      if (!json) continue;
+      try {
+        const msg = JSON.parse(json);
+        onEvent(msg.event || "output", msg.data);
+      } catch {
+        // ignore malformed lines
+      }
+    }
+  }
+}
+
 function App() {
   const [a, setA] = useState("0");
   const [b, setB] = useState("0");
@@ -9,22 +48,14 @@ function App() {
 
   async function calc(op: string) {
     setResult("Calculating...");
-    try {
-      const res = await fetch("/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cmd: ["/calculate.sh", a, b, op] }),
-      });
-      const text = await res.text();
-      const data = JSON.parse(text);
-      if (data.error) {
-        setResult("Error: " + data.error);
-      } else {
-        setResult(`Result: ${data.result}`);
+    await runCommand(["/calculate.sh"], { a: parseFloat(a), b: parseFloat(b), op }, (event, data) => {
+      if (event === "error") {
+        setResult("Error: " + JSON.stringify(data));
+      } else if (event === "output") {
+        const d = data as Record<string, number>;
+        setResult(`Result: ${d.result}`);
       }
-    } catch (e) {
-      setResult("Error: " + e);
-    }
+    });
   }
 
   async function benchmark() {
@@ -33,11 +64,11 @@ function App() {
     const start = performance.now();
     let count = 0;
     while (performance.now() - start < duration) {
-      await fetch("/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cmd: ["/calculate.sh", "2", "3", "add"] }),
-      });
+      await runCommand(
+        ["/calculate.sh"],
+        { a: 2, b: 3, op: "add" },
+        () => {}
+      );
       count++;
       setResult(`Benchmarking... ${count} calls`);
     }

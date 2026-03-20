@@ -83,7 +83,7 @@ fn main() {
             match forward_to_socket(&method, &server_path, body.as_deref()) {
                 Ok(response_body) => {
                     let mime = if path.starts_with("/run") {
-                        "application/json"
+                        "text/event-stream"
                     } else {
                         mime_for_path(&path)
                     };
