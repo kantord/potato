@@ -1,0 +1,19 @@
+[package]
+name = "potato-server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+tower = "0.5"
+bollard = "0.20"
+futures-util = "0.3"
+tower-http = { version = "0.6", features = ["fs"] }
+tar = "0.4"
+
+[dev-dependencies]
+hyper = "1"
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }

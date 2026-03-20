@@ -1,0 +1,22 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nickel-org/nickel.rs/master/schema/tauri.conf.json",
+  "productName": "Potato",
+  "version": "0.1.0",
+  "identifier": "com.potato.app",
+  "build": {
+    "frontendDist": "frontend"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Potato",
+        "width": 800,
+        "height": 600
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src potato://localhost"
+    }
+  }
+}

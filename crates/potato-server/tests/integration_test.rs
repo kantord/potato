@@ -6,7 +6,7 @@ use tower::ServiceExt;
 
 fn test_app() -> axum::Router {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    potato::app(dir)
+    potato_server::app(dir)
 }
 
 #[tokio::test]
