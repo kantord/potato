@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-tauri = { version = "2", features = [] }
-tokio = { version = "1", features = ["full"] }
+tauri = { version = "=2.10.3", features = [] }
+tokio = { version = "=1.50.0", features = ["full"] }
 
 [build-dependencies]
-tauri-build = "2"
+tauri-build = "=2.5.6"
