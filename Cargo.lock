@@ -2653,6 +2653,7 @@ dependencies = [
 name = "potato-cli"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "serde",
  "serde_json",
 ]
@@ -2671,6 +2672,7 @@ dependencies = [
 name = "potato-server"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "axum",
  "bollard",
  "clap",

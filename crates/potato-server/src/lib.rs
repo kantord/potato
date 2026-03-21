@@ -184,7 +184,7 @@ async fn call_stdin(
     Json(serde_json::json!({"ok": false, "error": "call not found or not started"}))
 }
 
-pub async fn start_container(image: &str) -> Result<String, Box<dyn std::error::Error>> {
+pub async fn start_container(image: &str) -> anyhow::Result<String> {
     let docker = Docker::connect_with_local_defaults()?;
 
     let config = ContainerCreateBody {
@@ -223,7 +223,7 @@ pub async fn stop_container(container_id: &str) {
     }
 }
 
-pub async fn extract_image(image: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
+pub async fn extract_image(image: &str) -> anyhow::Result<PathBuf> {
     let docker = Docker::connect_with_local_defaults()?;
 
     let config = ContainerCreateBody {
@@ -279,10 +279,8 @@ pub async fn extract_image(image: &str) -> Result<PathBuf, Box<dyn std::error::E
 
     unpack_handle
         .join()
-        .map_err(|_| "unpack thread panicked")?
-        .map_err(|e| -> Box<dyn std::error::Error> {
-            Box::new(std::io::Error::other(e.to_string()))
-        })?;
+        .map_err(|_| anyhow::anyhow!("unpack thread panicked"))?
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
 
     let _ = docker
         .remove_container(

@@ -1,3 +1,4 @@
+use anyhow::{Context, bail};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::thread;
@@ -7,9 +8,9 @@ fn http_request(
     method: &str,
     path: &str,
     body: Option<&[u8]>,
-) -> Result<Vec<u8>, String> {
+) -> anyhow::Result<Vec<u8>> {
     let mut stream = UnixStream::connect(socket_path)
-        .map_err(|e| format!("failed to connect to {socket_path}: {e}"))?;
+        .with_context(|| format!("failed to connect to {socket_path}"))?;
 
     let mut request =
         format!("{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n");
@@ -21,19 +22,13 @@ fn http_request(
     }
     request.push_str("\r\n");
 
-    stream
-        .write_all(request.as_bytes())
-        .map_err(|e| format!("write: {e}"))?;
+    stream.write_all(request.as_bytes())?;
     if let Some(b) = body {
-        stream
-            .write_all(b)
-            .map_err(|e| format!("write body: {e}"))?;
+        stream.write_all(b)?;
     }
 
     let mut response = Vec::new();
-    stream
-        .read_to_end(&mut response)
-        .map_err(|e| format!("read: {e}"))?;
+    stream.read_to_end(&mut response)?;
 
     if let Some(pos) = String::from_utf8_lossy(&response).find("\r\n\r\n") {
         Ok(response[pos + 4..].to_vec())
@@ -133,41 +128,39 @@ fn format_data(data: &serde_json::Value) -> String {
     }
 }
 
-fn main() {
+fn activate(app_name: &str) -> anyhow::Result<()> {
+    let body = serde_json::json!({ "image": app_name });
+    let response = http_request(
+        "/tmp/potato.sock",
+        "POST",
+        "/activate",
+        Some(body.to_string().as_bytes()),
+    )
+    .context("is potato-server running?")?;
+
+    let result: serde_json::Value = serde_json::from_slice(&response)?;
+    if result.get("ok") != Some(&serde_json::Value::Bool(true)) {
+        bail!("failed to activate app: {result}");
+    }
+    Ok(())
+}
+
+fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 3 {
-        eprintln!("Usage: potato <app-name> <command> [args...]");
-        eprintln!("Example: potato potato-hello-simple /echo.sh");
-        eprintln!("         echo hello | potato potato-hello-simple /echo.sh");
-        std::process::exit(1);
+        bail!(
+            "Usage: potato <app-name> <command> [args...]\nExample: potato potato-hello-simple /echo.sh"
+        );
     }
 
     let app_name = &args[1];
     let cmd: Vec<String> = args[2..].to_vec();
 
-    // Activate the app via the management socket
-    let activate_body = serde_json::json!({ "image": app_name });
-    let response = http_request(
-        "/tmp/potato.sock",
-        "POST",
-        "/activate",
-        Some(activate_body.to_string().as_bytes()),
-    )
-    .unwrap_or_else(|e| {
-        eprintln!("failed to activate app (is potato-server running?): {e}");
-        std::process::exit(1);
-    });
-
-    let activate_result: serde_json::Value = serde_json::from_slice(&response).unwrap_or_default();
-    if activate_result.get("ok") != Some(&serde_json::Value::Bool(true)) {
-        eprintln!("failed to activate app: {}", activate_result);
-        std::process::exit(1);
-    }
+    activate(app_name)?;
 
     let socket_path = format!("/tmp/potato-{app_name}.sock");
 
-    // Single POST /calls — returns SSE stream with "started" event containing call_id
     let body = serde_json::json!({ "cmd": cmd });
     let socket_for_stream = socket_path.clone();
     let socket_for_stdin = socket_path.clone();
@@ -185,16 +178,14 @@ fn main() {
         );
     });
 
-    // Wait for the "started" event to get the call_id
     let call_id = match started_rx.recv() {
         Ok(id) => id,
         Err(_) => {
             let _ = output_handle.join();
-            return;
+            return Ok(());
         }
     };
 
-    // Forward stdin to the call
     let stdin_path = format!("/calls/{call_id}/stdin");
     let stdin = std::io::stdin();
     for line in stdin.lock().lines() {
@@ -213,4 +204,5 @@ fn main() {
     }
 
     let _ = output_handle.join();
+    Ok(())
 }
