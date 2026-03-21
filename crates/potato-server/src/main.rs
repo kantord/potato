@@ -1,10 +1,18 @@
+use clap::Parser;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::net::UnixListener;
 use tokio::sync::Mutex;
-use std::collections::HashMap;
+
+/// Potato server — manages containerized apps via per-app Unix sockets
+#[derive(Parser)]
+#[command(name = "potato-server", version, about)]
+struct Args {}
 
 #[tokio::main]
 async fn main() {
+    Args::parse();
+
     let registry: potato_server::AppRegistry = Arc::new(Mutex::new(HashMap::new()));
 
     let mgmt_path = "/tmp/potato.sock";
