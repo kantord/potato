@@ -9,25 +9,25 @@ importers:
   .:
     devDependencies:
       '@types/node':
-        specifier: ^24.0.0
+        specifier: 24.12.0
         version: 24.12.0
       '@wdio/cli':
-        specifier: ^9
+        specifier: 9.26.1
         version: 9.26.1(@types/node@24.12.0)(expect-webdriverio@5.6.5)
       '@wdio/local-runner':
-        specifier: ^9
+        specifier: 9.26.1
         version: 9.26.1(@wdio/globals@9.26.1)(webdriverio@9.26.1)
       '@wdio/mocha-framework':
-        specifier: ^9
+        specifier: 9.26.1
         version: 9.26.1
       '@wdio/spec-reporter':
-        specifier: ^9
+        specifier: 9.26.1
         version: 9.26.1
       ts-node:
-        specifier: ^10
+        specifier: 10.9.2
         version: 10.9.2(@types/node@24.12.0)(typescript@5.9.3)
       typescript:
-        specifier: ^5
+        specifier: 5.9.3
         version: 5.9.3
 
 packages:
