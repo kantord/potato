@@ -2654,17 +2654,26 @@ name = "potato-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "potato-transport",
+ "potato-client",
  "serde",
  "serde_json",
  "tokio",
 ]
 
 [[package]]
+name = "potato-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "potato-transport",
+ "serde_json",
+]
+
+[[package]]
 name = "potato-gui"
 version = "0.1.0"
 dependencies = [
- "potato-transport",
+ "potato-client",
  "serde_json",
  "tauri",
  "tauri-build",

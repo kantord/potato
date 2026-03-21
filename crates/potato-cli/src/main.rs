@@ -1,5 +1,5 @@
-use anyhow::{Context, bail};
-use potato_transport::{PotatoConnection, SseEvent};
+use anyhow::bail;
+use potato_client::{PotatoClient, SseEvent};
 use std::io::BufRead;
 
 fn format_data(data: &serde_json::Value) -> String {
@@ -7,21 +7,6 @@ fn format_data(data: &serde_json::Value) -> String {
         serde_json::Value::String(s) => s.clone(),
         other => other.to_string(),
     }
-}
-
-async fn activate(app_name: &str) -> anyhow::Result<()> {
-    let server = PotatoConnection::new("/tmp/potato.sock");
-    let body = serde_json::json!({ "image": app_name });
-    let response = server
-        .fetch("POST", "/activate", Some(body.to_string().as_bytes()))
-        .await
-        .context("is potato-server running?")?;
-
-    let result: serde_json::Value = serde_json::from_slice(&response)?;
-    if result.get("ok") != Some(&serde_json::Value::Bool(true)) {
-        bail!("failed to activate app: {result}");
-    }
-    Ok(())
 }
 
 #[tokio::main]
@@ -37,18 +22,14 @@ async fn main() -> anyhow::Result<()> {
     let app_name = &args[1];
     let cmd: Vec<String> = args[2..].to_vec();
 
-    activate(app_name).await?;
-
-    let app = PotatoConnection::new(format!("/tmp/potato-{app_name}.sock"));
+    let client = PotatoClient::new();
+    let app = client.app(app_name).await?;
     let app_for_stdin = app.clone();
-
-    let body = serde_json::json!({ "cmd": cmd });
-    let body_bytes = body.to_string().into_bytes();
 
     let (started_tx, started_rx) = std::sync::mpsc::channel::<String>();
 
     let output_handle = tokio::spawn(async move {
-        app.stream("POST", "/calls", Some(&body_bytes), |event| match event {
+        app.call(&cmd, |event| match event {
             SseEvent::Started { call_id } => {
                 let _ = started_tx.send(call_id);
             }
@@ -67,8 +48,6 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    let stdin_path = format!("/calls/{call_id}/stdin");
-
     let stdin_handle = tokio::task::spawn_blocking(move || {
         let stdin = std::io::stdin();
         let lines: Vec<String> = stdin.lock().lines().map_while(Result::ok).collect();
@@ -77,10 +56,8 @@ async fn main() -> anyhow::Result<()> {
 
     let lines = stdin_handle.await?;
     for line in lines {
-        let body = serde_json::json!({ "data": { "text": line } });
-        let _ = app_for_stdin
-            .fetch("POST", &stdin_path, Some(body.to_string().as_bytes()))
-            .await;
+        let data = serde_json::json!({ "text": line });
+        let _ = app_for_stdin.send_stdin(&call_id, &data).await;
     }
 
     let _ = output_handle.await;
