@@ -2657,6 +2657,7 @@ dependencies = [
  "potato-transport",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -2699,7 +2700,13 @@ name = "potato-transport"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytes",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "hyperlocal",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]

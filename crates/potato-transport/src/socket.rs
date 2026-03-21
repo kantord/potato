@@ -1,58 +1,43 @@
 use anyhow::Context;
-use std::io::{Read, Write};
-use std::os::unix::net::UnixStream;
+use http_body_util::{BodyExt, Full};
+use hyper::body::Bytes;
+use hyper::{Method, Request};
+use hyper_util::client::legacy::Client;
+use hyperlocal::{UnixClientExt, UnixConnector, Uri};
 
-fn build_request(method: &str, path: &str, body: Option<&[u8]>) -> Vec<u8> {
-    let mut request =
-        format!("{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n");
-    if let Some(b) = body {
-        request.push_str(&format!(
-            "Content-Type: application/json\r\nContent-Length: {}\r\n",
-            b.len()
-        ));
-    }
-    request.push_str("\r\n");
-    let mut bytes = request.into_bytes();
-    if let Some(b) = body {
-        bytes.extend_from_slice(b);
-    }
-    bytes
+fn build_client() -> Client<UnixConnector, Full<Bytes>> {
+    Client::unix()
 }
 
 /// Send an HTTP request over a Unix socket and return the response body.
-pub fn http_request(
+pub async fn http_request(
     socket_path: &str,
     method: &str,
     path: &str,
     body: Option<&[u8]>,
 ) -> anyhow::Result<Vec<u8>> {
-    let mut stream = UnixStream::connect(socket_path)
-        .with_context(|| format!("failed to connect to {socket_path}"))?;
+    let client = build_client();
+    let uri: hyper::Uri = Uri::new(socket_path, path).into();
 
-    stream.write_all(&build_request(method, path, body))?;
+    let method: Method = method.parse().context("invalid HTTP method")?;
+    let body_bytes = body.unwrap_or(&[]);
 
-    let mut response = Vec::new();
-    stream.read_to_end(&mut response)?;
+    let request = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("Host", "localhost")
+        .header("Content-Type", "application/json")
+        .body(Full::new(Bytes::copy_from_slice(body_bytes)))
+        .context("failed to build request")?;
 
-    if let Some(pos) = String::from_utf8_lossy(&response).find("\r\n\r\n") {
-        Ok(response[pos + 4..].to_vec())
-    } else {
-        Ok(response)
-    }
-}
+    let response = client.request(request).await.context("request failed")?;
 
-/// Open a Unix socket connection and send an HTTP request, returning the raw stream
-/// positioned after the response headers.
-pub(crate) fn open_sse_stream(
-    socket_path: &str,
-    method: &str,
-    path: &str,
-    body: Option<&[u8]>,
-) -> anyhow::Result<std::io::BufReader<UnixStream>> {
-    let mut stream = UnixStream::connect(socket_path)
-        .with_context(|| format!("failed to connect to {socket_path}"))?;
+    let body = response
+        .into_body()
+        .collect()
+        .await
+        .context("failed to read response body")?
+        .to_bytes();
 
-    stream.write_all(&build_request(method, path, body))?;
-
-    Ok(std::io::BufReader::new(stream))
+    Ok(body.to_vec())
 }

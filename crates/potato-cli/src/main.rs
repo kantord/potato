@@ -1,7 +1,6 @@
 use anyhow::{Context, bail};
 use potato_transport::{SseEvent, http_request, stream_sse};
 use std::io::BufRead;
-use std::thread;
 
 fn format_data(data: &serde_json::Value) -> String {
     match data {
@@ -10,7 +9,7 @@ fn format_data(data: &serde_json::Value) -> String {
     }
 }
 
-fn activate(app_name: &str) -> anyhow::Result<()> {
+async fn activate(app_name: &str) -> anyhow::Result<()> {
     let body = serde_json::json!({ "image": app_name });
     let response = http_request(
         "/tmp/potato.sock",
@@ -18,6 +17,7 @@ fn activate(app_name: &str) -> anyhow::Result<()> {
         "/activate",
         Some(body.to_string().as_bytes()),
     )
+    .await
     .context("is potato-server running?")?;
 
     let result: serde_json::Value = serde_json::from_slice(&response)?;
@@ -27,7 +27,8 @@ fn activate(app_name: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 3 {
@@ -39,7 +40,7 @@ fn main() -> anyhow::Result<()> {
     let app_name = &args[1];
     let cmd: Vec<String> = args[2..].to_vec();
 
-    activate(app_name)?;
+    activate(app_name).await?;
 
     let socket_path = format!("/tmp/potato-{app_name}.sock");
 
@@ -50,7 +51,7 @@ fn main() -> anyhow::Result<()> {
 
     let (started_tx, started_rx) = std::sync::mpsc::channel::<String>();
 
-    let output_handle = thread::spawn(move || {
+    let output_handle = tokio::spawn(async move {
         stream_sse(
             &socket_for_stream,
             "POST",
@@ -64,34 +65,39 @@ fn main() -> anyhow::Result<()> {
                 SseEvent::Error(data) => eprintln!("{}", format_data(&data)),
                 SseEvent::End => {}
             },
-        );
+        )
+        .await;
     });
 
     let call_id = match started_rx.recv() {
         Ok(id) => id,
         Err(_) => {
-            let _ = output_handle.join();
+            let _ = output_handle.await;
             return Ok(());
         }
     };
 
     let stdin_path = format!("/calls/{call_id}/stdin");
-    let stdin = std::io::stdin();
-    for line in stdin.lock().lines() {
-        let line = match line {
-            Ok(l) => l,
-            Err(_) => break,
-        };
 
+    // Read stdin in a blocking thread
+    let stdin_handle = tokio::task::spawn_blocking(move || {
+        let stdin = std::io::stdin();
+        let lines: Vec<String> = stdin.lock().lines().map_while(Result::ok).collect();
+        lines
+    });
+
+    let lines = stdin_handle.await?;
+    for line in lines {
         let body = serde_json::json!({ "data": { "text": line } });
         let _ = http_request(
             &socket_for_stdin,
             "POST",
             &stdin_path,
             Some(body.to_string().as_bytes()),
-        );
+        )
+        .await;
     }
 
-    let _ = output_handle.join();
+    let _ = output_handle.await;
     Ok(())
 }

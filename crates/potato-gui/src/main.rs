@@ -15,20 +15,18 @@ async fn create_call(
 ) -> Result<(), String> {
     let socket_path = state.0.clone();
 
-    tokio::task::spawn_blocking(move || {
-        stream_sse_raw(
-            &socket_path,
-            "POST",
-            "/calls",
-            Some(body.as_bytes()),
-            |data| {
-                let _ = on_event.send(data.to_string());
-            },
-        );
-        Ok::<(), String>(())
-    })
-    .await
-    .map_err(|e| format!("task failed: {e}"))?
+    stream_sse_raw(
+        &socket_path,
+        "POST",
+        "/calls",
+        Some(body.as_bytes()),
+        |data| {
+            let _ = on_event.send(data.to_string());
+        },
+    )
+    .await;
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -40,13 +38,10 @@ async fn send_call_stdin(
     let socket_path = state.0.clone();
     let path = format!("/calls/{call_id}/stdin");
 
-    tokio::task::spawn_blocking(move || {
-        let response = http_request(&socket_path, "POST", &path, Some(data.as_bytes()))
-            .map_err(|e| e.to_string())?;
-        String::from_utf8(response).map_err(|e| format!("invalid response: {e}"))
-    })
-    .await
-    .map_err(|e| format!("task failed: {e}"))?
+    let response = http_request(&socket_path, "POST", &path, Some(data.as_bytes()))
+        .await
+        .map_err(|e| e.to_string())?;
+    String::from_utf8(response).map_err(|e| format!("invalid response: {e}"))
 }
 
 fn mime_for_path(path: &str) -> &'static str {
@@ -70,17 +65,19 @@ fn mime_for_path(path: &str) -> &'static str {
 }
 
 fn activate_app(app_name: &str) {
+    let rt = tokio::runtime::Runtime::new().unwrap();
     let body = serde_json::json!({ "image": app_name });
-    let response = http_request(
-        "/tmp/potato.sock",
-        "POST",
-        "/activate",
-        Some(body.to_string().as_bytes()),
-    )
-    .unwrap_or_else(|e| {
-        eprintln!("failed to activate app (is potato-server running?): {e}");
-        std::process::exit(1);
-    });
+    let response = rt
+        .block_on(http_request(
+            "/tmp/potato.sock",
+            "POST",
+            "/activate",
+            Some(body.to_string().as_bytes()),
+        ))
+        .unwrap_or_else(|e| {
+            eprintln!("failed to activate app (is potato-server running?): {e}");
+            std::process::exit(1);
+        });
 
     let result: serde_json::Value = serde_json::from_slice(&response).unwrap_or_default();
     if result.get("ok") != Some(&serde_json::Value::Bool(true)) {
@@ -109,7 +106,14 @@ fn main() {
             }
             let server_path = format!("/files{path}");
 
-            match http_request(&socket_path_for_protocol, "GET", &server_path, None) {
+            // Protocol handler is sync — use a blocking runtime
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            match rt.block_on(http_request(
+                &socket_path_for_protocol,
+                "GET",
+                &server_path,
+                None,
+            )) {
                 Ok(response_body) => tauri::http::Response::builder()
                     .status(200)
                     .header("Content-Type", mime_for_path(&path))
