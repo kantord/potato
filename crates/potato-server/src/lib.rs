@@ -249,11 +249,28 @@ pub async fn extract_image(image: &str) -> Result<PathBuf, Box<dyn std::error::E
         )
         .await?;
 
+    let extract_dir = std::env::temp_dir().join(format!("potato-{}", uuid()));
+    std::fs::create_dir_all(&extract_dir)?;
+
+    // Stream tar directly to disk via a pipe — avoids loading entire image into memory
+    let (pipe_reader, mut pipe_writer) = os_pipe::pipe()?;
+    let extract_dir_clone = extract_dir.clone();
+
+    let unpack_handle = std::thread::spawn(move || -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let mut archive = tar::Archive::new(pipe_reader);
+        archive.unpack(&extract_dir_clone)?;
+        Ok(())
+    });
+
     let mut tar_stream = docker.export_container(&container.id);
-    let mut tar_bytes = Vec::new();
     while let Some(chunk) = tar_stream.next().await {
-        tar_bytes.extend_from_slice(&chunk?);
+        let chunk = chunk?;
+        std::io::Write::write_all(&mut pipe_writer, &chunk)?;
     }
+    drop(pipe_writer);
+
+    unpack_handle.join().map_err(|_| "unpack thread panicked")?
+        .map_err(|e| -> Box<dyn std::error::Error> { Box::new(std::io::Error::other(e.to_string())) })?;
 
     let _ = docker
         .remove_container(
@@ -261,12 +278,6 @@ pub async fn extract_image(image: &str) -> Result<PathBuf, Box<dyn std::error::E
             Some(RemoveContainerOptions { force: true, ..Default::default() }),
         )
         .await;
-
-    let extract_dir = std::env::temp_dir().join(format!("potato-{}", uuid()));
-    std::fs::create_dir_all(&extract_dir)?;
-
-    let mut archive = tar::Archive::new(&tar_bytes[..]);
-    archive.unpack(&extract_dir)?;
 
     Ok(extract_dir)
 }
