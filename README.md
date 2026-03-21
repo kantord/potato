@@ -24,15 +24,20 @@ A Potato app is a Docker image containing:
 
 The frontend communicates with backend processes through a streaming API — no need to write your own HTTP server. Backend processes read JSON from stdin and write output to stdout. Potato handles the plumbing.
 
-```
-┌─────────────────────────────────┐
-│  Potato (Tauri or CLI)          │
-│  ┌───────────┐  ┌────────────┐  │
-│  │  Web UI   │──│  Axum API  │──┼──▶ Docker Container
-│  │ (frontend)│  │ /calls SSE │  │    ├── /index.html
-│  └───────────┘  └────────────┘  │    ├── /calculate.sh
-│                                 │    └── /chat.sh
-└─────────────────────────────────┘
+```mermaid
+graph LR
+    subgraph Potato
+        UI["Web UI\n(frontend)"]
+        API["Axum API\n/calls SSE"]
+        UI --> API
+    end
+    subgraph Container["Docker Container"]
+        HTML["/index.html"]
+        CALC["/calculate.sh"]
+        CHAT["/chat.sh"]
+    end
+    API -- "stdin/stdout" --> Container
+    UI -. "static files" .-> HTML
 ```
 
 ## Quick Start
