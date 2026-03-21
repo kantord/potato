@@ -7,28 +7,19 @@ async function runCommand(
   stdin: unknown,
   onEvent: (event: string, data: unknown) => void
 ): Promise<void> {
-  // Create a call
-  const createRes = await fetch("/calls", {
+  // Single request: POST /calls returns SSE stream
+  const res = await fetch("/calls", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cmd }),
   });
-  const { call_id } = await createRes.json();
 
-  // Connect events first (this starts the process)
-  const res = await fetch(`/calls/${call_id}/events`);
-
-  // Send stdin (server waits for process to be ready)
-  fetch(`/calls/${call_id}/stdin`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ data: stdin }),
-  });
   const reader = res.body?.getReader();
   if (!reader) return;
 
   const decoder = new TextDecoder();
   let buffer = "";
+  let callId: string | null = null;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -44,6 +35,18 @@ async function runCommand(
       if (!json) continue;
       try {
         const msg = JSON.parse(json);
+        if (msg.event === "started" && msg.data?.call_id) {
+          callId = msg.data.call_id;
+          // Send stdin now that the process is running
+          if (stdin !== undefined) {
+            fetch(`/calls/${callId}/stdin`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ data: stdin }),
+            });
+          }
+          continue;
+        }
         onEvent(msg.event || "output", msg.data);
       } catch {
         // ignore malformed lines

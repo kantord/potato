@@ -18,25 +18,15 @@ use tower_http::services::ServeDir;
 
 type StdinWriter = Arc<Mutex<Option<Box<dyn tokio::io::AsyncWrite + Send + Unpin>>>>;
 
-struct PendingCall {
-    cmd: Vec<String>,
-}
-
 #[derive(Clone)]
 struct AppState {
     container_id: Option<String>,
-    pending: Arc<Mutex<HashMap<String, PendingCall>>>,
     stdin_writers: Arc<Mutex<HashMap<String, StdinWriter>>>,
 }
 
 #[derive(serde::Deserialize)]
 struct CreateCallRequest {
     cmd: Vec<String>,
-}
-
-#[derive(serde::Serialize)]
-struct CreateCallResponse {
-    call_id: String,
 }
 
 #[derive(serde::Deserialize)]
@@ -63,42 +53,20 @@ fn tag_line(line: &str, default_event: &str) -> String {
     }
 }
 
-// POST /calls — register a call (does NOT start the process)
+// POST /calls — create call, start the process, and stream output as SSE
+// First event is {"event":"started","data":{"call_id":"..."}} so client can send stdin
 async fn create_call(
     State(state): State<AppState>,
     Json(body): Json<CreateCallRequest>,
-) -> Json<CreateCallResponse> {
-    let call_id = uuid();
-    state.pending.lock().await.insert(
-        call_id.clone(),
-        PendingCall { cmd: body.cmd },
-    );
-    Json(CreateCallResponse { call_id })
-}
-
-// GET /calls/{id}/events — start the exec and stream output
-async fn call_events(
-    State(state): State<AppState>,
-    Path(call_id): Path<String>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let (tx, rx) = mpsc::channel::<Result<Event, Infallible>>(32);
 
-    let pending_call = state.pending.lock().await.remove(&call_id);
-
+    let call_id = uuid();
     let container_id = state.container_id.clone();
     let stdin_writers = state.stdin_writers.clone();
     let cid = call_id.clone();
 
     tokio::spawn(async move {
-        let call = match pending_call {
-            Some(c) => c,
-            None => {
-                let msg = tag_line("call not found or already started", "error");
-                let _ = tx.send(Ok(Event::default().data(msg))).await;
-                return;
-            }
-        };
-
         let container_id = match container_id {
             Some(id) => id,
             None => {
@@ -121,7 +89,7 @@ async fn call_events(
             .create_exec(
                 &container_id,
                 CreateExecOptions {
-                    cmd: Some(call.cmd),
+                    cmd: Some(body.cmd),
                     attach_stdout: Some(true),
                     attach_stderr: Some(true),
                     attach_stdin: Some(true),
@@ -142,6 +110,10 @@ async fn call_events(
             Ok(StartExecResults::Attached { mut output, input }) => {
                 let stdin_writer: StdinWriter = Arc::new(Mutex::new(Some(Box::new(input))));
                 stdin_writers.lock().await.insert(cid.clone(), stdin_writer);
+
+                // Send started event with call_id so client can send stdin
+                let started = serde_json::json!({"event":"started","data":{"call_id": cid}});
+                let _ = tx.send(Ok(Event::default().data(started.to_string()))).await;
 
                 while let Some(Ok(log)) = output.next().await {
                     let (text, default_event) = match &log {
@@ -188,7 +160,6 @@ async fn call_stdin(
 ) -> Json<serde_json::Value> {
     let line = serde_json::to_string(&body.data).unwrap() + "\n";
 
-    // Retry briefly — the process may still be starting via GET /events
     for _ in 0..20 {
         {
             let writers = state.stdin_writers.lock().await;
@@ -260,7 +231,6 @@ pub async fn extract_image(image: &str) -> Result<PathBuf, Box<dyn std::error::E
     let extract_dir = std::env::temp_dir().join(format!("potato-{}", uuid()));
     std::fs::create_dir_all(&extract_dir)?;
 
-    // Stream tar directly to disk via a pipe — avoids loading entire image into memory
     let (pipe_reader, mut pipe_writer) = os_pipe::pipe()?;
     let extract_dir_clone = extract_dir.clone();
 
@@ -388,12 +358,10 @@ fn uuid() -> String {
 pub fn app(static_dir: PathBuf, container_id: Option<String>) -> Router {
     let state = AppState {
         container_id,
-        pending: Arc::new(Mutex::new(HashMap::new())),
         stdin_writers: Arc::new(Mutex::new(HashMap::new())),
     };
     Router::new()
         .route("/calls", post(create_call))
-        .route("/calls/{id}/events", get(call_events))
         .route("/calls/{id}/stdin", post(call_stdin))
         .nest_service("/files", ServeDir::new(static_dir))
         .with_state(state)

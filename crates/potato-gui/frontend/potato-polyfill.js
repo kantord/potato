@@ -8,24 +8,9 @@
     var url = typeof input === "string" ? input : input.url;
     var method = (init && init.method) || "GET";
 
-    // Intercept POST /calls — create call, return JSON response
+    // Intercept POST /calls — stream via Channel (returns SSE with started event)
     if (url === "/calls" && method === "POST") {
-      return invoke("create_call", { body: init.body || "{}" }).then(function (
-        text
-      ) {
-        return new Response(text, {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      });
-    }
-
-    // Intercept GET /calls/{id}/events — stream via Channel
-    var eventsMatch = url.match(/^\/calls\/([^/]+)\/events$/);
-    if (eventsMatch && method === "GET") {
-      return streamViaChannel("stream_call_events", {
-        callId: eventsMatch[1],
-      });
+      return streamViaChannel("create_call", { body: init.body || "{}" });
     }
 
     // Intercept POST /calls/{id}/stdin — forward via command

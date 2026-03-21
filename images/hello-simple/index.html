@@ -127,27 +127,15 @@
         }
 
         async function streamCall(cmd, stdin, onEvent) {
-            const createRes = await fetch('/calls', {
+            const res = await fetch('/calls', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ cmd: cmd })
             });
-            const { call_id } = await createRes.json();
-
-            // Connect events first (this starts the process)
-            const res = await fetch('/calls/' + call_id + '/events');
-
-            // Send stdin (server waits for process to be ready)
-            if (stdin !== undefined) {
-                fetch('/calls/' + call_id + '/stdin', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ data: stdin })
-                });
-            }
             const reader = res.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
+            let callId = null;
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
@@ -160,6 +148,17 @@
                     if (!json) continue;
                     try {
                         const msg = JSON.parse(json);
+                        if (msg.event === 'started' && msg.data && msg.data.call_id) {
+                            callId = msg.data.call_id;
+                            if (stdin !== undefined) {
+                                fetch('/calls/' + callId + '/stdin', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ data: stdin })
+                                });
+                            }
+                            continue;
+                        }
                         onEvent(msg.event || 'output', msg.data);
                     } catch {}
                 }
@@ -226,19 +225,12 @@
         async function startEcho() {
             echoStatus.textContent = 'Starting...';
 
-            // Create a call
             const res = await fetch('/calls', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ cmd: ['/echo.sh'] })
             });
-            const data = await res.json();
-            echoCallId = data.call_id;
-            echoStatus.textContent = 'Connected (call: ' + echoCallId.slice(0, 8) + '...)';
-
-            // Start listening to events
-            const eventsRes = await fetch('/calls/' + echoCallId + '/events');
-            const reader = eventsRes.body.getReader();
+            const reader = res.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
 
@@ -259,6 +251,11 @@
                         if (!json) continue;
                         try {
                             const msg = JSON.parse(json);
+                            if (msg.event === 'started' && msg.data && msg.data.call_id) {
+                                echoCallId = msg.data.call_id;
+                                echoStatus.textContent = 'Connected (call: ' + echoCallId.slice(0, 8) + '...)';
+                                continue;
+                            }
                             if (msg.event === 'output' && msg.data) {
                                 addMessage(msg.data, 'echo', echoLog);
                             }

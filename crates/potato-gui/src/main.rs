@@ -94,32 +94,17 @@ fn read_sse_lines(socket_path: &str, method: &str, path: &str, body: Option<&[u8
     Ok(())
 }
 
+// POST /calls — now returns SSE stream
 #[tauri::command]
 async fn create_call(
     state: tauri::State<'_, SocketPath>,
     body: String,
-) -> Result<String, String> {
-    let socket_path = state.0.clone();
-
-    tokio::task::spawn_blocking(move || {
-        let response = forward_to_socket(&socket_path, "POST", "/calls", Some(body.as_bytes()))?;
-        String::from_utf8(response).map_err(|e| format!("invalid response: {e}"))
-    })
-    .await
-    .map_err(|e| format!("task failed: {e}"))?
-}
-
-#[tauri::command]
-async fn stream_call_events(
-    state: tauri::State<'_, SocketPath>,
-    call_id: String,
     on_event: Channel<String>,
 ) -> Result<(), String> {
     let socket_path = state.0.clone();
-    let path = format!("/calls/{call_id}/events");
 
     tokio::task::spawn_blocking(move || {
-        read_sse_lines(&socket_path, "GET", &path, None, &on_event)
+        read_sse_lines(&socket_path, "POST", "/calls", Some(body.as_bytes()), &on_event)
     })
     .await
     .map_err(|e| format!("task failed: {e}"))?
@@ -184,7 +169,7 @@ fn activate_app(app_name: &str) {
 
 fn main() {
     let app_name = std::env::args().nth(1).unwrap_or_else(|| {
-        eprintln!("Usage: potato-gui <app-name>");
+        eprintln!("Usage: potato-app <app-name>");
         std::process::exit(1);
     });
 
@@ -215,7 +200,7 @@ fn main() {
                     .unwrap(),
             }
         })
-        .invoke_handler(tauri::generate_handler![create_call, stream_call_events, send_call_stdin])
+        .invoke_handler(tauri::generate_handler![create_call, send_call_stdin])
         .setup(move |app| {
             app.manage(SocketPath(socket_path));
 

@@ -37,7 +37,14 @@ fn http_request(
     }
 }
 
-fn stream_sse(socket_path: &str, method: &str, path: &str, body: Option<&[u8]>, ready: Option<std::sync::mpsc::Sender<()>>) {
+/// Streams SSE from a request. Reports call_id via started_tx when "started" event arrives.
+fn stream_sse(
+    socket_path: &str,
+    method: &str,
+    path: &str,
+    body: Option<&[u8]>,
+    started_tx: Option<std::sync::mpsc::Sender<String>>,
+) {
     let mut stream = match UnixStream::connect(socket_path) {
         Ok(s) => s,
         Err(e) => {
@@ -74,9 +81,6 @@ fn stream_sse(socket_path: &str, method: &str, path: &str, body: Option<&[u8]>, 
         if !past_headers {
             if line.is_empty() {
                 past_headers = true;
-                if let Some(ref r) = ready {
-                    let _ = r.send(());
-                }
             }
             continue;
         }
@@ -91,6 +95,12 @@ fn stream_sse(socket_path: &str, method: &str, path: &str, body: Option<&[u8]>, 
                 let event = parsed.get("event").and_then(|e| e.as_str()).unwrap_or("output");
 
                 match event {
+                    "started" => {
+                        if let Some(ref tx) = started_tx {
+                            let call_id = parsed["data"]["call_id"].as_str().unwrap_or("").to_string();
+                            let _ = tx.send(call_id);
+                        }
+                    }
                     "end" => break,
                     "error" => {
                         if let Some(d) = parsed.get("data") {
@@ -119,9 +129,9 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 3 {
-        eprintln!("Usage: potato-cli <app-name> <command> [args...]");
-        eprintln!("Example: potato-cli potato-hello-simple /echo.sh");
-        eprintln!("         echo hello | potato-cli potato-hello-simple /echo.sh");
+        eprintln!("Usage: potato <app-name> <command> [args...]");
+        eprintln!("Example: potato potato-hello-simple /echo.sh");
+        eprintln!("         echo hello | potato potato-hello-simple /echo.sh");
         std::process::exit(1);
     }
 
@@ -149,44 +159,29 @@ fn main() {
 
     let socket_path = format!("/tmp/potato-{app_name}.sock");
 
-    // Always use bidirectional mode — create call, connect events, forward stdin
+    // Single POST /calls — returns SSE stream with "started" event containing call_id
     let body = serde_json::json!({ "cmd": cmd });
-    let response = http_request(
-        &socket_path,
-        "POST",
-        "/calls",
-        Some(body.to_string().as_bytes()),
-    )
-    .unwrap_or_else(|e| {
-        eprintln!("failed to create call: {e}");
-        std::process::exit(1);
-    });
+    let socket_for_stream = socket_path.clone();
+    let socket_for_stdin = socket_path.clone();
+    let body_bytes = body.to_string().into_bytes();
 
-    let call: serde_json::Value = serde_json::from_slice(&response).unwrap_or_else(|e| {
-        eprintln!("invalid response: {e}");
-        std::process::exit(1);
-    });
+    let (started_tx, started_rx) = std::sync::mpsc::channel::<String>();
 
-    let call_id = call["call_id"].as_str().unwrap_or_else(|| {
-        eprintln!("no call_id in response");
-        std::process::exit(1);
-    });
-
-    let events_path = format!("/calls/{call_id}/events");
-    let stdin_path = format!("/calls/{call_id}/stdin");
-    let socket_events = socket_path.clone();
-    let socket_stdin = socket_path.clone();
-
-    // Connect to events first (starts the process)
-    let (ready_tx, ready_rx) = std::sync::mpsc::channel::<()>();
     let output_handle = thread::spawn(move || {
-        stream_sse(&socket_events, "GET", &events_path, None, Some(ready_tx));
+        stream_sse(&socket_for_stream, "POST", "/calls", Some(&body_bytes), Some(started_tx));
     });
 
-    // Wait for events connection to be established
-    let _ = ready_rx.recv();
+    // Wait for the "started" event to get the call_id
+    let call_id = match started_rx.recv() {
+        Ok(id) => id,
+        Err(_) => {
+            let _ = output_handle.join();
+            return;
+        }
+    };
 
-    // Forward stdin to the call (works for both piped and interactive)
+    // Forward stdin to the call
+    let stdin_path = format!("/calls/{call_id}/stdin");
     let stdin = std::io::stdin();
     for line in stdin.lock().lines() {
         let line = match line {
@@ -196,13 +191,12 @@ fn main() {
 
         let body = serde_json::json!({ "data": { "text": line } });
         let _ = http_request(
-            &socket_stdin,
+            &socket_for_stdin,
             "POST",
             &stdin_path,
             Some(body.to_string().as_bytes()),
         );
     }
 
-    // Wait for output to finish
     let _ = output_handle.join();
 }
