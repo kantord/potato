@@ -283,9 +283,7 @@ pub async fn extract_image(image: &str) -> Result<PathBuf, Box<dyn std::error::E
 }
 
 fn uuid() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let n = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-    format!("{n:x}")
+    uuid::Uuid::new_v4().to_string()
 }
 
 pub fn app(static_dir: PathBuf, container_id: Option<String>) -> Router {
