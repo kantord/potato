@@ -68,7 +68,7 @@ impl PotatoConnection {
 
     /// Stream raw SSE data lines. Calls `on_line` for each `data:` line
     /// (with prefix stripped). Sends `{"event":"end"}` when the stream closes.
-    pub async fn stream_raw(
+    async fn stream_raw(
         &self,
         method: &str,
         path: &str,

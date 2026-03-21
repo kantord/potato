@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use potato_transport::PotatoConnection;
+use potato_transport::{PotatoConnection, SseEvent};
 use tauri::Manager;
 use tauri::ipc::Channel;
 use tauri::webview::WebviewWindowBuilder;
@@ -15,8 +15,16 @@ async fn create_call(
 ) -> Result<(), String> {
     state
         .0
-        .stream_raw("POST", "/calls", Some(body.as_bytes()), |data| {
-            let _ = on_event.send(data.to_string());
+        .stream("POST", "/calls", Some(body.as_bytes()), |event| {
+            let json = match &event {
+                SseEvent::Started { call_id } => {
+                    serde_json::json!({"event": "started", "data": {"call_id": call_id}})
+                }
+                SseEvent::Output(data) => serde_json::json!({"event": "output", "data": data}),
+                SseEvent::Error(data) => serde_json::json!({"event": "error", "data": data}),
+                SseEvent::End => serde_json::json!({"event": "end"}),
+            };
+            let _ = on_event.send(json.to_string());
         })
         .await;
 
