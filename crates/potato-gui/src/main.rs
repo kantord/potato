@@ -1,44 +1,38 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use potato_transport::{http_request, stream_sse_raw};
+use potato_transport::Socket;
 use tauri::Manager;
 use tauri::ipc::Channel;
 use tauri::webview::WebviewWindowBuilder;
 
-struct SocketPath(String);
+struct AppSocket(Socket);
 
 #[tauri::command]
 async fn create_call(
-    state: tauri::State<'_, SocketPath>,
+    state: tauri::State<'_, AppSocket>,
     body: String,
     on_event: Channel<String>,
 ) -> Result<(), String> {
-    let socket_path = state.0.clone();
-
-    stream_sse_raw(
-        &socket_path,
-        "POST",
-        "/calls",
-        Some(body.as_bytes()),
-        |data| {
+    state
+        .0
+        .stream_sse_raw("POST", "/calls", Some(body.as_bytes()), |data| {
             let _ = on_event.send(data.to_string());
-        },
-    )
-    .await;
+        })
+        .await;
 
     Ok(())
 }
 
 #[tauri::command]
 async fn send_call_stdin(
-    state: tauri::State<'_, SocketPath>,
+    state: tauri::State<'_, AppSocket>,
     call_id: String,
     data: String,
 ) -> Result<String, String> {
-    let socket_path = state.0.clone();
     let path = format!("/calls/{call_id}/stdin");
-
-    let response = http_request(&socket_path, "POST", &path, Some(data.as_bytes()))
+    let response = state
+        .0
+        .fetch("POST", &path, Some(data.as_bytes()))
         .await
         .map_err(|e| e.to_string())?;
     String::from_utf8(response).map_err(|e| format!("invalid response: {e}"))
@@ -65,15 +59,11 @@ fn mime_for_path(path: &str) -> &'static str {
 }
 
 fn activate_app(app_name: &str) {
+    let server = Socket::new("/tmp/potato.sock");
     let rt = tokio::runtime::Runtime::new().unwrap();
     let body = serde_json::json!({ "image": app_name });
     let response = rt
-        .block_on(http_request(
-            "/tmp/potato.sock",
-            "POST",
-            "/activate",
-            Some(body.to_string().as_bytes()),
-        ))
+        .block_on(server.fetch("POST", "/activate", Some(body.to_string().as_bytes())))
         .unwrap_or_else(|e| {
             eprintln!("failed to activate app (is potato-server running?): {e}");
             std::process::exit(1);
@@ -94,8 +84,8 @@ fn main() {
 
     activate_app(&app_name);
 
-    let socket_path = format!("/tmp/potato-{app_name}.sock");
-    let socket_path_for_protocol = socket_path.clone();
+    let app_socket = Socket::new(format!("/tmp/potato-{app_name}.sock"));
+    let protocol_socket = app_socket.clone();
 
     tauri::Builder::default()
         .register_uri_scheme_protocol("potato", move |_ctx, request| {
@@ -106,14 +96,8 @@ fn main() {
             }
             let server_path = format!("/files{path}");
 
-            // Protocol handler is sync — use a blocking runtime
             let rt = tokio::runtime::Runtime::new().unwrap();
-            match rt.block_on(http_request(
-                &socket_path_for_protocol,
-                "GET",
-                &server_path,
-                None,
-            )) {
+            match rt.block_on(protocol_socket.fetch("GET", &server_path, None)) {
                 Ok(response_body) => tauri::http::Response::builder()
                     .status(200)
                     .header("Content-Type", mime_for_path(&path))
@@ -128,7 +112,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![create_call, send_call_stdin])
         .setup(move |app| {
-            app.manage(SocketPath(socket_path));
+            app.manage(AppSocket(app_socket));
 
             let polyfill = include_str!("../frontend/potato-polyfill.js");
 
