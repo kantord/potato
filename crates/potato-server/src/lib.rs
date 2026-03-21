@@ -282,6 +282,84 @@ pub async fn extract_image(image: &str) -> Result<PathBuf, Box<dyn std::error::E
     Ok(extract_dir)
 }
 
+// --- Management API ---
+
+use std::collections::HashMap as StdHashMap;
+
+pub type AppRegistry = Arc<Mutex<StdHashMap<String, RunningApp>>>;
+
+pub struct RunningApp {
+    pub container_id: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct ActivateRequest {
+    image: String,
+}
+
+async fn activate_handler(
+    State(registry): State<AppRegistry>,
+    Json(body): Json<ActivateRequest>,
+) -> Json<serde_json::Value> {
+    let image = &body.image;
+
+    {
+        let apps = registry.lock().await;
+        if apps.contains_key(image) {
+            return Json(serde_json::json!({"ok": true, "status": "already_active"}));
+        }
+    }
+
+    let static_dir = match extract_image(image).await {
+        Ok(dir) => dir,
+        Err(e) => {
+            return Json(serde_json::json!({"ok": false, "error": format!("failed to extract image: {e}")}));
+        }
+    };
+
+    let container_id = match start_container(image).await {
+        Ok(id) => Some(id),
+        Err(_) => None,
+    };
+
+    let path = format!("/tmp/potato-{image}.sock");
+    let _ = std::fs::remove_file(&path);
+
+    let listener = match tokio::net::UnixListener::bind(&path) {
+        Ok(l) => l,
+        Err(e) => {
+            return Json(serde_json::json!({"ok": false, "error": format!("failed to bind socket: {e}")}));
+        }
+    };
+
+    let router = app(static_dir, container_id.clone());
+    tokio::spawn(async move {
+        axum::serve(listener, router).await.unwrap();
+    });
+
+    registry.lock().await.insert(
+        image.to_string(),
+        RunningApp { container_id },
+    );
+
+    Json(serde_json::json!({"ok": true, "status": "activated"}))
+}
+
+async fn list_apps_handler(
+    State(registry): State<AppRegistry>,
+) -> Json<serde_json::Value> {
+    let apps = registry.lock().await;
+    let names: Vec<&String> = apps.keys().collect();
+    Json(serde_json::json!({"apps": names}))
+}
+
+pub fn management_app(registry: AppRegistry) -> Router<()> {
+    Router::new()
+        .route("/activate", post(activate_handler))
+        .route("/apps", get(list_apps_handler))
+        .with_state(registry)
+}
+
 fn uuid() -> String {
     uuid::Uuid::new_v4().to_string()
 }

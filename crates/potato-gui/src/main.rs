@@ -6,8 +6,6 @@ use tauri::ipc::Channel;
 use tauri::Manager;
 use tauri::webview::WebviewWindowBuilder;
 
-const APPS: &[&str] = &["potato-hello-world", "potato-hello-simple"];
-
 struct SocketPath(String);
 
 fn forward_to_socket(
@@ -164,18 +162,33 @@ fn mime_for_path(path: &str) -> &'static str {
     }
 }
 
-fn main() {
-    let app_name = std::env::args().nth(1).unwrap_or_else(|| {
-        eprintln!("Usage: potato-client <app-name>");
-        eprintln!("Available apps: {}", APPS.join(", "));
+fn activate_app(app_name: &str) {
+    let body = serde_json::json!({ "image": app_name });
+    let response = forward_to_socket(
+        "/tmp/potato.sock",
+        "POST",
+        "/activate",
+        Some(body.to_string().as_bytes()),
+    )
+    .unwrap_or_else(|e| {
+        eprintln!("failed to activate app (is potato-server running?): {e}");
         std::process::exit(1);
     });
 
-    if !APPS.contains(&app_name.as_str()) {
-        eprintln!("Unknown app: {app_name}");
-        eprintln!("Available apps: {}", APPS.join(", "));
+    let result: serde_json::Value = serde_json::from_slice(&response).unwrap_or_default();
+    if result.get("ok") != Some(&serde_json::Value::Bool(true)) {
+        eprintln!("failed to activate app: {result}");
         std::process::exit(1);
     }
+}
+
+fn main() {
+    let app_name = std::env::args().nth(1).unwrap_or_else(|| {
+        eprintln!("Usage: potato-gui <app-name>");
+        std::process::exit(1);
+    });
+
+    activate_app(&app_name);
 
     let socket_path = format!("/tmp/potato-{app_name}.sock");
     let socket_path_for_protocol = socket_path.clone();

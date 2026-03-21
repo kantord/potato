@@ -127,6 +127,26 @@ fn main() {
 
     let app_name = &args[1];
     let cmd: Vec<String> = args[2..].to_vec();
+
+    // Activate the app via the management socket
+    let activate_body = serde_json::json!({ "image": app_name });
+    let response = http_request(
+        "/tmp/potato.sock",
+        "POST",
+        "/activate",
+        Some(activate_body.to_string().as_bytes()),
+    )
+    .unwrap_or_else(|e| {
+        eprintln!("failed to activate app (is potato-server running?): {e}");
+        std::process::exit(1);
+    });
+
+    let activate_result: serde_json::Value = serde_json::from_slice(&response).unwrap_or_default();
+    if activate_result.get("ok") != Some(&serde_json::Value::Bool(true)) {
+        eprintln!("failed to activate app: {}", activate_result);
+        std::process::exit(1);
+    }
+
     let socket_path = format!("/tmp/potato-{app_name}.sock");
 
     let has_stdin = !std::io::stdin().is_terminal();

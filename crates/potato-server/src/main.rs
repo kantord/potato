@@ -1,66 +1,35 @@
+use std::sync::Arc;
 use tokio::net::UnixListener;
-
-const APPS: &[&str] = &["potato-hello-world", "potato-hello-simple"];
-
-struct RunningApp {
-    name: String,
-    container_id: Option<String>,
-}
+use tokio::sync::Mutex;
+use std::collections::HashMap;
 
 #[tokio::main]
 async fn main() {
-    let mut running_apps = Vec::new();
+    let registry: potato_server::AppRegistry = Arc::new(Mutex::new(HashMap::new()));
 
-    for &image in APPS {
-        println!("[{image}] Extracting image filesystem...");
-        let static_dir = match potato_server::extract_image(image).await {
-            Ok(dir) => {
-                println!("[{image}] Extracted to {}", dir.display());
-                dir
-            }
-            Err(e) => {
-                eprintln!("[{image}] Failed to extract image: {e}");
-                continue;
-            }
-        };
+    let mgmt_path = "/tmp/potato.sock";
+    let _ = std::fs::remove_file(mgmt_path);
+    let mgmt_listener = UnixListener::bind(mgmt_path).unwrap();
+    println!("Potato server listening on {mgmt_path}");
 
-        let container_id = match potato_server::start_container(image).await {
-            Ok(id) => {
-                println!("[{image}] Container {id} running");
-                Some(id)
-            }
-            Err(e) => {
-                println!("[{image}] No container started (static-only app): {e}");
-                None
-            }
-        };
+    let mgmt_app = potato_server::management_app(registry.clone());
 
-        let path = format!("/tmp/potato-{image}.sock");
-        let _ = std::fs::remove_file(&path);
+    tokio::spawn(async move {
+        axum::serve(mgmt_listener, mgmt_app).await.unwrap();
+    });
 
-        let listener = UnixListener::bind(&path).unwrap();
-        println!("[{image}] Listening on {path}");
-
-        let app = potato_server::app(static_dir, container_id.clone());
-        tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
-        });
-
-        running_apps.push(RunningApp {
-            name: image.to_string(),
-            container_id,
-        });
-    }
-
-    println!("All apps started. Press Ctrl+C to stop.");
+    println!("Ready. Press Ctrl+C to stop.");
 
     tokio::signal::ctrl_c().await.unwrap();
 
     println!("Shutting down...");
-    for app in &running_apps {
+    let apps = registry.lock().await;
+    for (name, app) in apps.iter() {
         if let Some(id) = &app.container_id {
-            println!("[{}] Stopping container...", app.name);
+            println!("[{name}] Stopping container...");
             potato_server::stop_container(id).await;
         }
+        let path = format!("/tmp/potato-{name}.sock");
+        let _ = std::fs::remove_file(&path);
     }
 }
