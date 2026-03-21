@@ -1,5 +1,5 @@
 use anyhow::{Context, bail};
-use potato_transport::{Socket, SseEvent};
+use potato_transport::{PotatoConnection, SseEvent};
 use std::io::BufRead;
 
 fn format_data(data: &serde_json::Value) -> String {
@@ -10,7 +10,7 @@ fn format_data(data: &serde_json::Value) -> String {
 }
 
 async fn activate(app_name: &str) -> anyhow::Result<()> {
-    let server = Socket::new("/tmp/potato.sock");
+    let server = PotatoConnection::new("/tmp/potato.sock");
     let body = serde_json::json!({ "image": app_name });
     let response = server
         .fetch("POST", "/activate", Some(body.to_string().as_bytes()))
@@ -39,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
 
     activate(app_name).await?;
 
-    let app = Socket::new(format!("/tmp/potato-{app_name}.sock"));
+    let app = PotatoConnection::new(format!("/tmp/potato-{app_name}.sock"));
     let app_for_stdin = app.clone();
 
     let body = serde_json::json!({ "cmd": cmd });

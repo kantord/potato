@@ -15,11 +15,11 @@ pub enum SseEvent {
 
 /// A connection to a Unix socket endpoint.
 #[derive(Clone)]
-pub struct Socket {
+pub struct PotatoConnection {
     path: String,
 }
 
-impl Socket {
+impl PotatoConnection {
     pub fn new(path: impl Into<String>) -> Self {
         Self { path: path.into() }
     }

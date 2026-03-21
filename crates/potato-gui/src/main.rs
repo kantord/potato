@@ -1,11 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use potato_transport::Socket;
+use potato_transport::PotatoConnection;
 use tauri::Manager;
 use tauri::ipc::Channel;
 use tauri::webview::WebviewWindowBuilder;
 
-struct AppSocket(Socket);
+struct AppSocket(PotatoConnection);
 
 #[tauri::command]
 async fn create_call(
@@ -59,7 +59,7 @@ fn mime_for_path(path: &str) -> &'static str {
 }
 
 fn activate_app(app_name: &str) {
-    let server = Socket::new("/tmp/potato.sock");
+    let server = PotatoConnection::new("/tmp/potato.sock");
     let rt = tokio::runtime::Runtime::new().unwrap();
     let body = serde_json::json!({ "image": app_name });
     let response = rt
@@ -84,7 +84,7 @@ fn main() {
 
     activate_app(&app_name);
 
-    let app_socket = Socket::new(format!("/tmp/potato-{app_name}.sock"));
+    let app_socket = PotatoConnection::new(format!("/tmp/potato-{app_name}.sock"));
     let protocol_socket = app_socket.clone();
 
     tauri::Builder::default()
