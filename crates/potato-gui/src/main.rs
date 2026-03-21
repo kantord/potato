@@ -2,8 +2,8 @@
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::UnixStream;
-use tauri::ipc::Channel;
 use tauri::Manager;
+use tauri::ipc::Channel;
 use tauri::webview::WebviewWindowBuilder;
 
 struct SocketPath(String);
@@ -17,9 +17,8 @@ fn forward_to_socket(
     let mut stream = UnixStream::connect(socket_path)
         .map_err(|e| format!("failed to connect to socket: {e}"))?;
 
-    let mut request = format!(
-        "{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n"
-    );
+    let mut request =
+        format!("{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n");
     if let Some(b) = body {
         request.push_str(&format!(
             "Content-Type: application/json\r\nContent-Length: {}\r\n",
@@ -49,13 +48,18 @@ fn forward_to_socket(
     }
 }
 
-fn read_sse_lines(socket_path: &str, method: &str, path: &str, body: Option<&[u8]>, on_event: &Channel<String>) -> Result<(), String> {
+fn read_sse_lines(
+    socket_path: &str,
+    method: &str,
+    path: &str,
+    body: Option<&[u8]>,
+    on_event: &Channel<String>,
+) -> Result<(), String> {
     let mut stream = UnixStream::connect(socket_path)
         .map_err(|e| format!("failed to connect to socket: {e}"))?;
 
-    let mut request = format!(
-        "{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n"
-    );
+    let mut request =
+        format!("{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n");
     if let Some(b) = body {
         request.push_str(&format!(
             "Content-Type: application/json\r\nContent-Length: {}\r\n",
@@ -64,9 +68,13 @@ fn read_sse_lines(socket_path: &str, method: &str, path: &str, body: Option<&[u8
     }
     request.push_str("\r\n");
 
-    stream.write_all(request.as_bytes()).map_err(|e| format!("failed to write: {e}"))?;
+    stream
+        .write_all(request.as_bytes())
+        .map_err(|e| format!("failed to write: {e}"))?;
     if let Some(b) = body {
-        stream.write_all(b).map_err(|e| format!("failed to write body: {e}"))?;
+        stream
+            .write_all(b)
+            .map_err(|e| format!("failed to write body: {e}"))?;
     }
 
     let reader = BufReader::new(stream);
@@ -104,7 +112,13 @@ async fn create_call(
     let socket_path = state.0.clone();
 
     tokio::task::spawn_blocking(move || {
-        read_sse_lines(&socket_path, "POST", "/calls", Some(body.as_bytes()), &on_event)
+        read_sse_lines(
+            &socket_path,
+            "POST",
+            "/calls",
+            Some(body.as_bytes()),
+            &on_event,
+        )
     })
     .await
     .map_err(|e| format!("task failed: {e}"))?

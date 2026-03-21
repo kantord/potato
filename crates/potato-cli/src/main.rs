@@ -11,9 +11,8 @@ fn http_request(
     let mut stream = UnixStream::connect(socket_path)
         .map_err(|e| format!("failed to connect to {socket_path}: {e}"))?;
 
-    let mut request = format!(
-        "{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n"
-    );
+    let mut request =
+        format!("{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n");
     if let Some(b) = body {
         request.push_str(&format!(
             "Content-Type: application/json\r\nContent-Length: {}\r\n",
@@ -22,13 +21,19 @@ fn http_request(
     }
     request.push_str("\r\n");
 
-    stream.write_all(request.as_bytes()).map_err(|e| format!("write: {e}"))?;
+    stream
+        .write_all(request.as_bytes())
+        .map_err(|e| format!("write: {e}"))?;
     if let Some(b) = body {
-        stream.write_all(b).map_err(|e| format!("write body: {e}"))?;
+        stream
+            .write_all(b)
+            .map_err(|e| format!("write body: {e}"))?;
     }
 
     let mut response = Vec::new();
-    stream.read_to_end(&mut response).map_err(|e| format!("read: {e}"))?;
+    stream
+        .read_to_end(&mut response)
+        .map_err(|e| format!("read: {e}"))?;
 
     if let Some(pos) = String::from_utf8_lossy(&response).find("\r\n\r\n") {
         Ok(response[pos + 4..].to_vec())
@@ -53,9 +58,8 @@ fn stream_sse(
         }
     };
 
-    let mut request = format!(
-        "{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n"
-    );
+    let mut request =
+        format!("{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n");
     if let Some(b) = body {
         request.push_str(&format!(
             "Content-Type: application/json\r\nContent-Length: {}\r\n",
@@ -92,12 +96,16 @@ fn stream_sse(
             }
 
             if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data) {
-                let event = parsed.get("event").and_then(|e| e.as_str()).unwrap_or("output");
+                let event = parsed
+                    .get("event")
+                    .and_then(|e| e.as_str())
+                    .unwrap_or("output");
 
                 match event {
                     "started" => {
                         if let Some(ref tx) = started_tx {
-                            let call_id = parsed["data"]["call_id"].as_str().unwrap_or("").to_string();
+                            let call_id =
+                                parsed["data"]["call_id"].as_str().unwrap_or("").to_string();
                             let _ = tx.send(call_id);
                         }
                     }
@@ -168,7 +176,13 @@ fn main() {
     let (started_tx, started_rx) = std::sync::mpsc::channel::<String>();
 
     let output_handle = thread::spawn(move || {
-        stream_sse(&socket_for_stream, "POST", "/calls", Some(&body_bytes), Some(started_tx));
+        stream_sse(
+            &socket_for_stream,
+            "POST",
+            "/calls",
+            Some(&body_bytes),
+            Some(started_tx),
+        );
     });
 
     // Wait for the "started" event to get the call_id

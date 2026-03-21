@@ -1,6 +1,10 @@
 use axum::extract::Path;
 use axum::response::sse::{Event, Sse};
-use axum::{Json, Router, extract::State, routing::{get, post}};
+use axum::{
+    Json, Router,
+    extract::State,
+    routing::{get, post},
+};
 use bollard::Docker;
 use bollard::container::LogOutput;
 use bollard::exec::{CreateExecOptions, StartExecResults};
@@ -113,7 +117,9 @@ async fn create_call(
 
                 // Send started event with call_id so client can send stdin
                 let started = serde_json::json!({"event":"started","data":{"call_id": cid}});
-                let _ = tx.send(Ok(Event::default().data(started.to_string()))).await;
+                let _ = tx
+                    .send(Ok(Event::default().data(started.to_string())))
+                    .await;
 
                 while let Some(Ok(log)) = output.next().await {
                     let (text, default_event) = match &log {
@@ -165,10 +171,10 @@ async fn call_stdin(
             let writers = state.stdin_writers.lock().await;
             if let Some(writer) = writers.get(&call_id) {
                 let mut guard = writer.lock().await;
-                if let Some(ref mut w) = *guard {
-                    if w.write_all(line.as_bytes()).await.is_ok() {
-                        return Json(serde_json::json!({"ok": true}));
-                    }
+                if let Some(ref mut w) = *guard
+                    && w.write_all(line.as_bytes()).await.is_ok()
+                {
+                    return Json(serde_json::json!({"ok": true}));
                 }
             }
         }
@@ -190,7 +196,10 @@ pub async fn start_container(image: &str) -> Result<String, Box<dyn std::error::
     let name = format!("potato-{}", uuid());
     let container = docker
         .create_container(
-            Some(CreateContainerOptions { name: Some(name), ..Default::default() }),
+            Some(CreateContainerOptions {
+                name: Some(name),
+                ..Default::default()
+            }),
             config,
         )
         .await?;
@@ -205,7 +214,10 @@ pub async fn stop_container(container_id: &str) {
         let _ = docker
             .remove_container(
                 container_id,
-                Some(RemoveContainerOptions { force: true, ..Default::default() }),
+                Some(RemoveContainerOptions {
+                    force: true,
+                    ..Default::default()
+                }),
             )
             .await;
     }
@@ -223,7 +235,10 @@ pub async fn extract_image(image: &str) -> Result<PathBuf, Box<dyn std::error::E
     let name = format!("potato-extract-{}", uuid());
     let container = docker
         .create_container(
-            Some(CreateContainerOptions { name: Some(name), ..Default::default() }),
+            Some(CreateContainerOptions {
+                name: Some(name),
+                ..Default::default()
+            }),
             config,
         )
         .await?;
@@ -234,22 +249,24 @@ pub async fn extract_image(image: &str) -> Result<PathBuf, Box<dyn std::error::E
     let (pipe_reader, mut pipe_writer) = os_pipe::pipe()?;
     let extract_dir_clone = extract_dir.clone();
 
-    let unpack_handle = std::thread::spawn(move || -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let mut archive = tar::Archive::new(pipe_reader);
-        archive.set_preserve_permissions(false);
-        archive.set_unpack_xattrs(false);
-        for entry in archive.entries()? {
-            let mut entry = match entry {
-                Ok(e) => e,
-                Err(_) => continue,
-            };
-            let kind = entry.header().entry_type();
-            if kind.is_file() || kind.is_dir() || kind.is_symlink() || kind.is_hard_link() {
-                let _ = entry.unpack_in(&extract_dir_clone);
+    let unpack_handle = std::thread::spawn(
+        move || -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+            let mut archive = tar::Archive::new(pipe_reader);
+            archive.set_preserve_permissions(false);
+            archive.set_unpack_xattrs(false);
+            for entry in archive.entries()? {
+                let mut entry = match entry {
+                    Ok(e) => e,
+                    Err(_) => continue,
+                };
+                let kind = entry.header().entry_type();
+                if kind.is_file() || kind.is_dir() || kind.is_symlink() || kind.is_hard_link() {
+                    let _ = entry.unpack_in(&extract_dir_clone);
+                }
             }
-        }
-        Ok(())
-    });
+            Ok(())
+        },
+    );
 
     let mut tar_stream = docker.export_container(&container.id);
     while let Some(chunk) = tar_stream.next().await {
@@ -260,13 +277,20 @@ pub async fn extract_image(image: &str) -> Result<PathBuf, Box<dyn std::error::E
     }
     drop(pipe_writer);
 
-    unpack_handle.join().map_err(|_| "unpack thread panicked")?
-        .map_err(|e| -> Box<dyn std::error::Error> { Box::new(std::io::Error::other(e.to_string())) })?;
+    unpack_handle
+        .join()
+        .map_err(|_| "unpack thread panicked")?
+        .map_err(|e| -> Box<dyn std::error::Error> {
+            Box::new(std::io::Error::other(e.to_string()))
+        })?;
 
     let _ = docker
         .remove_container(
             &container.id,
-            Some(RemoveContainerOptions { force: true, ..Default::default() }),
+            Some(RemoveContainerOptions {
+                force: true,
+                ..Default::default()
+            }),
         )
         .await;
 
@@ -304,14 +328,13 @@ async fn activate_handler(
     let static_dir = match extract_image(image).await {
         Ok(dir) => dir,
         Err(e) => {
-            return Json(serde_json::json!({"ok": false, "error": format!("failed to extract image: {e}")}));
+            return Json(
+                serde_json::json!({"ok": false, "error": format!("failed to extract image: {e}")}),
+            );
         }
     };
 
-    let container_id = match start_container(image).await {
-        Ok(id) => Some(id),
-        Err(_) => None,
-    };
+    let container_id = start_container(image).await.ok();
 
     let path = format!("/tmp/potato-{image}.sock");
     let _ = std::fs::remove_file(&path);
@@ -319,7 +342,9 @@ async fn activate_handler(
     let listener = match tokio::net::UnixListener::bind(&path) {
         Ok(l) => l,
         Err(e) => {
-            return Json(serde_json::json!({"ok": false, "error": format!("failed to bind socket: {e}")}));
+            return Json(
+                serde_json::json!({"ok": false, "error": format!("failed to bind socket: {e}")}),
+            );
         }
     };
 
@@ -328,17 +353,15 @@ async fn activate_handler(
         axum::serve(listener, router).await.unwrap();
     });
 
-    registry.lock().await.insert(
-        image.to_string(),
-        RunningApp { container_id },
-    );
+    registry
+        .lock()
+        .await
+        .insert(image.to_string(), RunningApp { container_id });
 
     Json(serde_json::json!({"ok": true, "status": "activated"}))
 }
 
-async fn list_apps_handler(
-    State(registry): State<AppRegistry>,
-) -> Json<serde_json::Value> {
+async fn list_apps_handler(State(registry): State<AppRegistry>) -> Json<serde_json::Value> {
     let apps = registry.lock().await;
     let names: Vec<&String> = apps.keys().collect();
     Json(serde_json::json!({"apps": names}))

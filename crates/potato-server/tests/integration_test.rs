@@ -1,10 +1,12 @@
 use axum::body::Body;
 use http_body_util::BodyExt;
 use hyper::Request;
+use rstest::*;
 use std::path::PathBuf;
 use tower::ServiceExt;
 
-async fn test_app() -> axum::Router {
+#[fixture]
+async fn app() -> axum::Router {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let container_id = potato_server::start_container("debian:bookworm-slim")
         .await
@@ -45,96 +47,64 @@ async fn call_and_get_events(app: axum::Router, cmd: Vec<&str>) -> Vec<serde_jso
     .unwrap();
 
     let text = String::from_utf8(body.to_bytes().to_vec()).unwrap();
-    let events = parse_sse_events(&text);
+    parse_sse_events(&text)
+}
 
-    // Filter out the "started" event for cleaner assertions
+fn non_started_events(events: Vec<serde_json::Value>) -> Vec<serde_json::Value> {
     events
         .into_iter()
         .filter(|e| e.get("event").and_then(|v| v.as_str()) != Some("started"))
         .collect()
 }
 
+#[rstest]
+#[case::date(vec!["date"], "output", None)]
+#[case::echo(vec!["echo", "hello"], "output", Some(serde_json::json!("hello")))]
+#[case::stderr(vec!["sh", "-c", "echo oops >&2"], "error", None)]
+#[case::pretagged(
+    vec!["echo", r#"{"event":"progress","data":{"percent":50}}"#],
+    "progress",
+    Some(serde_json::json!({"percent": 50}))
+)]
 #[tokio::test]
-async fn call_date_returns_output() {
-    let app = test_app().await;
-    let events = call_and_get_events(app, vec!["date"]).await;
+async fn call_produces_expected_event(
+    #[future] app: axum::Router,
+    #[case] cmd: Vec<&str>,
+    #[case] expected_event: &str,
+    #[case] expected_data: Option<serde_json::Value>,
+) {
+    let events = non_started_events(call_and_get_events(app.await, cmd).await);
     assert!(!events.is_empty(), "expected events");
-    assert_eq!(events[0]["event"], "output");
+    assert_eq!(events[0]["event"], expected_event);
+    if let Some(data) = expected_data {
+        assert_eq!(events[0]["data"], data);
+    }
 }
 
+#[rstest]
 #[tokio::test]
-async fn call_echo_returns_output() {
-    let app = test_app().await;
-    let events = call_and_get_events(app, vec!["echo", "hello"]).await;
-    assert!(!events.is_empty(), "expected events");
-    assert_eq!(events[0]["event"], "output");
-    assert_eq!(events[0]["data"], "hello");
-}
-
-#[tokio::test]
-async fn call_stderr_tagged_as_error() {
-    let app = test_app().await;
-    let events = call_and_get_events(app, vec!["sh", "-c", "echo oops >&2"]).await;
-    assert!(!events.is_empty(), "expected events");
-    assert_eq!(events[0]["event"], "error");
-}
-
-#[tokio::test]
-async fn call_pretagged_event_passed_through() {
-    let app = test_app().await;
-    let events = call_and_get_events(
-        app,
-        vec!["echo", r#"{"event":"progress","data":{"percent":50}}"#],
-    )
-    .await;
-    assert!(!events.is_empty(), "expected events");
-    assert_eq!(events[0]["event"], "progress");
-    assert_eq!(events[0]["data"]["percent"], 50);
-}
-
-#[tokio::test]
-async fn call_ends_with_end_event() {
-    let app = test_app().await;
-    let events = call_and_get_events(app, vec!["echo", "hi"]).await;
+async fn call_ends_with_end_event(#[future] app: axum::Router) {
+    let events = non_started_events(call_and_get_events(app.await, vec!["echo", "hi"]).await);
     let last = events.last().unwrap();
     assert_eq!(last["event"], "end");
 }
 
+#[rstest]
 #[tokio::test]
-async fn call_started_event_contains_call_id() {
-    let app = test_app().await;
-    let cmd_json = vec!["echo".to_string(), "hi".to_string()];
-    let body = serde_json::json!({ "cmd": cmd_json });
-
-    let response = app
-        .oneshot(
-            Request::post("/calls")
-                .header("Content-Type", "application/json")
-                .body(Body::from(body.to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    let body = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        response.into_body().collect(),
-    )
-    .await
-    .expect("timed out")
-    .unwrap();
-
-    let text = String::from_utf8(body.to_bytes().to_vec()).unwrap();
-    let all_events = parse_sse_events(&text);
-    let started = all_events.iter().find(|e| e["event"] == "started").expect("no started event");
+async fn call_started_event_contains_call_id(#[future] app: axum::Router) {
+    let events = call_and_get_events(app.await, vec!["echo", "hi"]).await;
+    let started = events
+        .iter()
+        .find(|e| e["event"] == "started")
+        .expect("no started event");
     assert!(started["data"]["call_id"].is_string());
 }
 
+#[rstest]
 #[tokio::test]
-async fn unknown_route_returns_404() {
-    let app = test_app().await;
-
+async fn unknown_route_returns_404(#[future] app: axum::Router) {
     let response = app
+        .await
         .oneshot(Request::get("/nonexistent").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -142,12 +112,16 @@ async fn unknown_route_returns_404() {
     assert_eq!(response.status(), 404);
 }
 
+#[rstest]
 #[tokio::test]
-async fn files_serves_static_content() {
-    let app = test_app().await;
-
+async fn files_serves_static_content(#[future] app: axum::Router) {
     let response = app
-        .oneshot(Request::get("/files/Cargo.toml").body(Body::empty()).unwrap())
+        .await
+        .oneshot(
+            Request::get("/files/Cargo.toml")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -158,12 +132,16 @@ async fn files_serves_static_content() {
     assert!(text.contains("[package]"));
 }
 
+#[rstest]
 #[tokio::test]
-async fn files_returns_404_for_missing_file() {
-    let app = test_app().await;
-
+async fn files_returns_404_for_missing_file(#[future] app: axum::Router) {
     let response = app
-        .oneshot(Request::get("/files/nonexistent.txt").body(Body::empty()).unwrap())
+        .await
+        .oneshot(
+            Request::get("/files/nonexistent.txt")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 
