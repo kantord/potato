@@ -21,7 +21,7 @@ export const config: Options.Testrunner = {
     {
       "alwaysMatch": {
         "tauri:options": {
-          application: path.join(rootDir, "target/debug/potato-gui"),
+          application: path.join(rootDir, "target/debug/potato-app"),
           args: ["potato-hello-world"],
         },
       },

@@ -3,6 +3,10 @@ name = "potato-gui"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "potato-app"
+path = "src/main.rs"
+
 [dependencies]
 tauri = { version = "=2.10.3", features = [] }
 tokio = { version = "=1.50.0", features = ["full"] }
