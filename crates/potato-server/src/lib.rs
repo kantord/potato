@@ -180,22 +180,30 @@ async fn call_events(
     Sse::new(ReceiverStream::new(rx))
 }
 
-// POST /calls/{id}/stdin — send input to the call
+// POST /calls/{id}/stdin — send input to the call (waits briefly for process to start)
 async fn call_stdin(
     State(state): State<AppState>,
     Path(call_id): Path<String>,
     Json(body): Json<StdinRequest>,
 ) -> Json<serde_json::Value> {
-    let writers = state.stdin_writers.lock().await;
-    if let Some(writer) = writers.get(&call_id) {
-        let mut guard = writer.lock().await;
-        if let Some(ref mut w) = *guard {
-            let line = serde_json::to_string(&body.data).unwrap() + "\n";
-            if w.write_all(line.as_bytes()).await.is_ok() {
-                return Json(serde_json::json!({"ok": true}));
+    let line = serde_json::to_string(&body.data).unwrap() + "\n";
+
+    // Retry briefly — the process may still be starting via GET /events
+    for _ in 0..20 {
+        {
+            let writers = state.stdin_writers.lock().await;
+            if let Some(writer) = writers.get(&call_id) {
+                let mut guard = writer.lock().await;
+                if let Some(ref mut w) = *guard {
+                    if w.write_all(line.as_bytes()).await.is_ok() {
+                        return Json(serde_json::json!({"ok": true}));
+                    }
+                }
             }
         }
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
+
     Json(serde_json::json!({"ok": false, "error": "call not found or not started"}))
 }
 

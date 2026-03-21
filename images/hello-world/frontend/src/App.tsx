@@ -18,10 +18,7 @@ async function runCommand(
   // Connect events first (this starts the process)
   const res = await fetch(`/calls/${call_id}/events`);
 
-  // Small delay to let the process start
-  await new Promise((r) => setTimeout(r, 50));
-
-  // Send stdin (process is now running)
+  // Send stdin (server waits for process to be ready)
   fetch(`/calls/${call_id}/stdin`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
