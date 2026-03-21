@@ -4,8 +4,8 @@ use axum::{
     routing::{get, post},
 };
 
+use crate::app_manager::{AppManager, RunningApp};
 use crate::container;
-use crate::registry::{AppRegistry, RunningApp};
 
 #[derive(serde::Deserialize)]
 struct ActivateRequest {
@@ -13,12 +13,12 @@ struct ActivateRequest {
 }
 
 async fn activate_handler(
-    State(registry): State<AppRegistry>,
+    State(manager): State<AppManager>,
     Json(body): Json<ActivateRequest>,
 ) -> Json<serde_json::Value> {
     let image = &body.image;
 
-    if registry.contains(image).await {
+    if manager.contains(image).await {
         return Json(serde_json::json!({"ok": true, "status": "already_active"}));
     }
 
@@ -50,21 +50,21 @@ async fn activate_handler(
         axum::serve(listener, router).await.unwrap();
     });
 
-    registry
+    manager
         .insert(image.to_string(), RunningApp { container_id })
         .await;
 
     Json(serde_json::json!({"ok": true, "status": "activated"}))
 }
 
-async fn list_apps_handler(State(registry): State<AppRegistry>) -> Json<serde_json::Value> {
-    let names = registry.list().await;
+async fn list_apps_handler(State(manager): State<AppManager>) -> Json<serde_json::Value> {
+    let names = manager.list().await;
     Json(serde_json::json!({"apps": names}))
 }
 
-pub fn management_app(registry: AppRegistry) -> Router<()> {
+pub fn management_app(manager: AppManager) -> Router<()> {
     Router::new()
         .route("/activate", post(activate_handler))
         .route("/apps", get(list_apps_handler))
-        .with_state(registry)
+        .with_state(manager)
 }

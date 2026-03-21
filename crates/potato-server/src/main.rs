@@ -9,11 +9,11 @@ struct Args {}
 async fn main() {
     Args::parse();
 
-    let registry = potato_server::start("/tmp/potato.sock").await;
+    let manager = potato_server::start("/tmp/potato.sock").await;
 
     println!("Ready. Press Ctrl+C to stop.");
     tokio::signal::ctrl_c().await.unwrap();
 
     println!("Shutting down...");
-    registry.shutdown().await;
+    manager.shutdown().await;
 }

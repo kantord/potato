@@ -10,11 +10,11 @@ pub struct RunningApp {
 
 /// Manages the set of active apps and their containers.
 #[derive(Clone, Default)]
-pub struct AppRegistry {
+pub struct AppManager {
     apps: Arc<Mutex<HashMap<String, RunningApp>>>,
 }
 
-impl AppRegistry {
+impl AppManager {
     pub fn new() -> Self {
         Self {
             apps: Arc::new(Mutex::new(HashMap::new())),
@@ -47,18 +47,18 @@ impl AppRegistry {
     }
 }
 
-/// Start the management socket and return the registry.
-pub async fn start(mgmt_path: &str) -> AppRegistry {
-    let registry = AppRegistry::new();
+/// Start the management socket and return the manager.
+pub async fn start(mgmt_path: &str) -> AppManager {
+    let manager = AppManager::new();
 
     let _ = std::fs::remove_file(mgmt_path);
     let listener = tokio::net::UnixListener::bind(mgmt_path).unwrap();
     println!("Potato server listening on {mgmt_path}");
 
-    let mgmt_app = crate::api::management_app(registry.clone());
+    let mgmt_app = crate::api::management_app(manager.clone());
     tokio::spawn(async move {
         axum::serve(listener, mgmt_app).await.unwrap();
     });
 
-    registry
+    manager
 }
