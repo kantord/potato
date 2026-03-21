@@ -134,15 +134,20 @@
             });
             const { call_id } = await createRes.json();
 
+            // Connect events first (this starts the process)
+            const res = await fetch('/calls/' + call_id + '/events');
+
+            // Small delay to let the process start
+            await new Promise(function(r) { setTimeout(r, 50); });
+
+            // Send stdin (process is now running)
             if (stdin !== undefined) {
-                await fetch('/calls/' + call_id + '/stdin', {
+                fetch('/calls/' + call_id + '/stdin', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ data: stdin })
                 });
             }
-
-            const res = await fetch('/calls/' + call_id + '/events');
             const reader = res.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';

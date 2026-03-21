@@ -15,15 +15,18 @@ async function runCommand(
   });
   const { call_id } = await createRes.json();
 
-  // Send stdin
-  await fetch(`/calls/${call_id}/stdin`, {
+  // Connect events first (this starts the process)
+  const res = await fetch(`/calls/${call_id}/events`);
+
+  // Small delay to let the process start
+  await new Promise((r) => setTimeout(r, 50));
+
+  // Send stdin (process is now running)
+  fetch(`/calls/${call_id}/stdin`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ data: stdin }),
   });
-
-  // Stream events
-  const res = await fetch(`/calls/${call_id}/events`);
   const reader = res.body?.getReader();
   if (!reader) return;
 
