@@ -24,6 +24,7 @@ anyhow = "=1.0.102"
 clap = { version = "=4.6.0", features = ["derive"] }
 potato-transport = { path = "../potato-transport" }
 minijinja = "2"
+form_urlencoded = "1"
 
 [dev-dependencies]
 hyper = "=1.8.1"

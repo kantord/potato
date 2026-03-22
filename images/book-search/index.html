@@ -5,20 +5,15 @@
     <title>Book Search</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
-    <script src="https://unpkg.com/htmx-ext-json-enc@2.0.1/json-enc.js"></script>
 </head>
 <body>
     <main class="container">
         <h1>Book Search</h1>
         <p><em>Search through Alice's Adventures in Wonderland by Lewis Carroll</em></p>
 
-        <form hx-post="/render/search.sh"
-              hx-target="#results"
-              hx-indicator="#loading"
-              hx-ext="json-enc"
-              hx-vals='js:{"data": {"query": document.getElementById("query").value}}'>
+        <form hx-post="/render/search.sh" hx-target="#results" hx-indicator="#loading">
             <fieldset role="group">
-                <input type="text" id="query" name="query" placeholder="Search for a word or phrase..." autofocus />
+                <input type="text" name="query" placeholder="Search for a word or phrase..." autofocus />
                 <button type="submit">Search</button>
             </fieldset>
         </form>

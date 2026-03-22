@@ -1,5 +1,6 @@
-use axum::Json;
+use axum::body::Bytes;
 use axum::extract::{Path, State};
+use axum::http::HeaderMap;
 use axum::response::{Html, IntoResponse, Response};
 use bollard::container::LogOutput;
 use futures_util::StreamExt;
@@ -8,16 +9,43 @@ use tokio::io::AsyncWriteExt;
 use super::super::state::AppState;
 use crate::container::AppContainer;
 
-#[derive(serde::Deserialize)]
-pub(crate) struct RenderRequest {
-    #[serde(default)]
-    data: Option<serde_json::Value>,
+/// Parse stdin data from either JSON or form-encoded body.
+fn parse_stdin_data(headers: &HeaderMap, body: &[u8]) -> Option<serde_json::Value> {
+    if body.is_empty() {
+        return None;
+    }
+
+    let content_type = headers
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    if content_type.contains("application/x-www-form-urlencoded") {
+        // Parse form fields into a JSON object
+        let pairs: Vec<(String, String)> = form_urlencoded::parse(body)
+            .map(|(k, v)| (k.into_owned(), v.into_owned()))
+            .collect();
+        let mut map = serde_json::Map::new();
+        for (key, value) in pairs {
+            map.insert(key, serde_json::Value::String(value));
+        }
+        Some(serde_json::Value::Object(map))
+    } else {
+        // Try JSON — look for {"data": ...} wrapper or use as-is
+        let parsed: serde_json::Value = serde_json::from_slice(body).ok()?;
+        if let Some(data) = parsed.get("data") {
+            Some(data.clone())
+        } else {
+            Some(parsed)
+        }
+    }
 }
 
 pub(crate) async fn handler(
     State(state): State<AppState>,
     Path(script): Path<String>,
-    Json(body): Json<RenderRequest>,
+    headers: HeaderMap,
+    body: Bytes,
 ) -> Response {
     let container_id = match &state.container_id {
         Some(id) => id.clone(),
@@ -44,8 +72,9 @@ pub(crate) async fn handler(
     };
 
     // Send stdin if provided
+    let stdin_data = parse_stdin_data(&headers, &body);
     let mut input = attached.input;
-    if let Some(data) = &body.data {
+    if let Some(data) = &stdin_data {
         let line = serde_json::to_string(data).unwrap() + "\n";
         let _ = input.write_all(line.as_bytes()).await;
     }
