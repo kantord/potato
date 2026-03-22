@@ -8,6 +8,7 @@ pub(crate) type StdinWriter = Arc<Mutex<Option<Box<dyn tokio::io::AsyncWrite + S
 #[derive(Clone)]
 pub(crate) struct AppState {
     pub container_id: Option<String>,
+    pub static_dir: std::path::PathBuf,
     pub stdin_writers: Arc<Mutex<HashMap<String, StdinWriter>>>,
 }
 

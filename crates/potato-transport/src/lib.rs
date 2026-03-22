@@ -112,17 +112,24 @@ impl PotatoConnection {
         method: &str,
         path: &str,
         body: Option<&[u8]>,
+        extra_headers: &[(&str, &str)],
     ) -> anyhow::Result<hyper::Response<hyper::body::Incoming>> {
         let client: Client<UnixConnector, Full<Bytes>> = Client::unix();
         let uri: hyper::Uri = Uri::new(&self.path, path).into();
         let method: Method = method.parse().context("invalid HTTP method")?;
         let body_bytes = body.unwrap_or(&[]);
 
-        let request = Request::builder()
+        let mut builder = Request::builder()
             .method(method)
             .uri(uri)
             .header("Host", "localhost")
-            .header("Content-Type", "application/json")
+            .header("Content-Type", "application/json");
+
+        for (key, value) in extra_headers {
+            builder = builder.header(*key, *value);
+        }
+
+        let request = builder
             .body(Full::new(Bytes::copy_from_slice(body_bytes)))
             .context("failed to build request")?;
 
@@ -136,7 +143,18 @@ impl PotatoConnection {
         path: &str,
         body: Option<&[u8]>,
     ) -> anyhow::Result<Vec<u8>> {
-        let response = self.request_raw(method, path, body).await?;
+        self.fetch_with_headers(method, path, body, &[]).await
+    }
+
+    /// Send an HTTP request with custom headers and return the full response body.
+    pub async fn fetch_with_headers(
+        &self,
+        method: &str,
+        path: &str,
+        body: Option<&[u8]>,
+        headers: &[(&str, &str)],
+    ) -> anyhow::Result<Vec<u8>> {
+        let response = self.request_raw(method, path, body, headers).await?;
 
         let body = response
             .into_body()
@@ -158,7 +176,7 @@ impl PotatoConnection {
         mut on_line: impl FnMut(&str),
     ) -> anyhow::Result<()> {
         let response = self
-            .request_raw(method, path, body)
+            .request_raw(method, path, body, &[])
             .await
             .context("failed to connect")?;
 

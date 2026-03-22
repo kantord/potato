@@ -81,6 +81,18 @@ impl PotatoApp {
         Ok(())
     }
 
+    /// Render a command's output through a template. Pass `accept` header to control format.
+    pub async fn render(&self, body: &str, accept: &str) -> anyhow::Result<Vec<u8>> {
+        self.conn
+            .fetch_with_headers(
+                "POST",
+                "/render",
+                Some(body.as_bytes()),
+                &[("Accept", accept)],
+            )
+            .await
+    }
+
     /// Fetch a static file from the app.
     pub async fn fetch_file(&self, path: &str) -> anyhow::Result<Vec<u8>> {
         let server_path = format!("/files{path}");

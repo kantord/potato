@@ -1,0 +1,6 @@
+{% for line in lines %}
+<div class="result">{{ line }}</div>
+{% endfor %}
+{% if not lines %}
+<div class="no-results">No results found.</div>
+{% endif %}

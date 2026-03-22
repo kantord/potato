@@ -54,6 +54,20 @@ async fn send_call_stdin(
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+async fn render(
+    state: tauri::State<'_, AppState>,
+    body: String,
+    accept: String,
+) -> Result<String, String> {
+    let response = state
+        .0
+        .render(&body, &accept)
+        .await
+        .map_err(|e| e.to_string())?;
+    String::from_utf8(response).map_err(|e| format!("invalid response: {e}"))
+}
+
 fn main() {
     let app_name = std::env::args().nth(1).unwrap_or_else(|| {
         eprintln!("Usage: potato-app <app-name>");
@@ -95,7 +109,11 @@ fn main() {
                     .expect("valid HTTP response"),
             }
         })
-        .invoke_handler(tauri::generate_handler![create_call, send_call_stdin])
+        .invoke_handler(tauri::generate_handler![
+            create_call,
+            send_call_stdin,
+            render
+        ])
         .setup(move |tauri_app| {
             tauri_app.manage(AppState(app));
 

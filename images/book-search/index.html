@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <title>Book Search</title>
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="https://unpkg.com/htmx-ext-json-enc@2.0.1/json-enc.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -17,7 +18,7 @@
         }
         h1 { font-size: 2rem; margin-bottom: 0.5rem; }
         .subtitle { color: #94a3b8; margin-bottom: 2rem; font-style: italic; }
-        .search-box {
+        form {
             display: flex;
             gap: 0.5rem;
             margin-bottom: 2rem;
@@ -44,93 +45,41 @@
         }
         button:hover { background: #4f46e5; }
         #results {
-            white-space: pre-wrap;
-            font-family: monospace;
             line-height: 1.6;
-            background: #1e293b;
-            padding: 1rem;
-            border-radius: 0.5rem;
-            min-height: 200px;
         }
-        .htmx-indicator {
-            display: none;
+        .result {
+            background: #1e293b;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        .no-results {
             color: #94a3b8;
             font-style: italic;
         }
-        .htmx-request .htmx-indicator { display: inline; }
+        .htmx-indicator {
+            color: #94a3b8;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
     <h1>Book Search</h1>
     <p class="subtitle">Search through Alice's Adventures in Wonderland by Lewis Carroll</p>
 
-    <div class="search-box">
+    <form hx-post="/render"
+          hx-target="#results"
+          hx-indicator="#loading"
+          hx-ext="json-enc"
+          hx-vals='js:{"cmd": ["/search.sh"], "data": {"query": document.getElementById("query").value}}'
+          hx-headers='{"Accept": "text/html"}'>
         <input type="text" id="query" name="query" placeholder="Search for a word or phrase..." autofocus />
-        <button id="search-btn">Search</button>
-    </div>
+        <button type="submit">Search</button>
+    </form>
 
-    <div id="results">Type a search term and press Search or Enter.</div>
-
-    <script>
-        const input = document.getElementById('query');
-        const btn = document.getElementById('search-btn');
-        const results = document.getElementById('results');
-
-        async function search() {
-            const query = input.value.trim();
-            if (!query) return;
-
-            results.textContent = 'Searching...';
-
-            const res = await fetch('/calls', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cmd: ['/search.sh'] })
-            });
-
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-            let callId = null;
-            let output = [];
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n');
-                buffer = lines.pop() || '';
-
-                for (const line of lines) {
-                    if (!line.startsWith('data:')) continue;
-                    const json = line.slice(5).trim();
-                    if (!json) continue;
-                    try {
-                        const msg = JSON.parse(json);
-                        if (msg.event === 'started' && msg.data && msg.data.call_id) {
-                            callId = msg.data.call_id;
-                            fetch('/calls/' + callId + '/stdin', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ data: { query: query } })
-                            });
-                        } else if (msg.event === 'output' && msg.data) {
-                            output.push(msg.data);
-                            results.textContent = output.join('\n');
-                        }
-                    } catch {}
-                }
-            }
-
-            if (output.length === 0) {
-                results.textContent = 'No results found.';
-            }
-        }
-
-        btn.addEventListener('click', search);
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') search();
-        });
-    </script>
+    <div id="loading" class="htmx-indicator">Searching...</div>
+    <div id="results">Type a search term and press Search.</div>
 </body>
 </html>
