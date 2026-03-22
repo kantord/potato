@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::container::AppContainer;
+use crate::container::{AppContainer, extract_image};
 
 pub struct RunningApp {
     pub container: Option<AppContainer>,
@@ -21,12 +21,34 @@ impl AppManager {
         }
     }
 
-    pub async fn contains(&self, name: &str) -> bool {
-        self.apps.lock().await.contains_key(name)
-    }
+    /// Activate an app: extract its image, start a container, and serve it on a Unix socket.
+    /// Returns "already_active" if the app is already running.
+    pub async fn activate(&self, image: &str) -> anyhow::Result<&'static str> {
+        if self.apps.lock().await.contains_key(image) {
+            return Ok("already_active");
+        }
 
-    pub async fn insert(&self, name: String, app: RunningApp) {
-        self.apps.lock().await.insert(name, app);
+        let static_dir = extract_image(image).await?;
+
+        let container = AppContainer::start(image).await.ok();
+        let container_id = container.as_ref().map(|c| c.id.clone());
+
+        let path = format!("/tmp/potato-{image}.sock");
+        let _ = std::fs::remove_file(&path);
+
+        let listener = tokio::net::UnixListener::bind(&path)?;
+
+        let router = crate::app_router(static_dir, container_id);
+        tokio::spawn(async move {
+            axum::serve(listener, router).await.unwrap();
+        });
+
+        self.apps
+            .lock()
+            .await
+            .insert(image.to_string(), RunningApp { container });
+
+        Ok("activated")
     }
 
     pub async fn list(&self) -> Vec<String> {
