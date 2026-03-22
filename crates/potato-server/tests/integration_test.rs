@@ -57,6 +57,8 @@ fn non_started_events(events: Vec<serde_json::Value>) -> Vec<serde_json::Value> 
         .collect()
 }
 
+// --- /calls tests ---
+
 // Commands with absolute paths bypass resolve_cmd
 #[rstest]
 #[case::date(vec!["/bin/date"], "output", None)]
@@ -100,6 +102,155 @@ async fn call_started_event_contains_call_id(#[future] app: axum::Router) {
         .expect("no started event");
     assert!(started["data"]["call_id"].is_string());
 }
+
+// --- /render tests ---
+
+/// Helper to create a test app with a script installed in /app/bin/
+async fn app_with_script(script_name: &str, script_content: &str) -> axum::Router {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let container = potato_server::container::AppContainer::start("debian:bookworm-slim")
+        .await
+        .expect("failed to start container");
+
+    // Install the script into the container
+    let install_cmd = vec![
+        "/bin/sh".to_string(),
+        "-c".to_string(),
+        format!(
+            "mkdir -p /app/bin && cat > /app/bin/{script_name} && chmod +x /app/bin/{script_name}"
+        ),
+    ];
+    let attached = container.exec(install_cmd).await.unwrap();
+    use tokio::io::AsyncWriteExt;
+    let mut input = attached.input;
+    input.write_all(script_content.as_bytes()).await.unwrap();
+    input.shutdown().await.unwrap();
+    drop(input);
+    // Wait for the command to finish
+    let mut output = attached.output;
+    use futures_util::StreamExt;
+    while output.next().await.is_some() {}
+
+    potato_server::app_router(dir, Some(container.id))
+}
+
+#[tokio::test]
+async fn render_returns_plain_text_without_template() {
+    // date.sh has no matching template in fixtures
+    let app = app_with_script("date.sh", "#!/bin/sh\ndate").await;
+
+    let response = app
+        .oneshot(
+            Request::post("/render/date.sh")
+                .header("Content-Type", "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let text = String::from_utf8(body.to_vec()).unwrap();
+    assert!(!text.is_empty());
+}
+
+#[tokio::test]
+async fn render_with_template_returns_html() {
+    // echo.sh has a matching template at fixtures/app/templates/echo.html
+    let app = app_with_script("echo.sh", "#!/bin/sh\necho hello\necho world").await;
+
+    let response = app
+        .oneshot(
+            Request::post("/render/echo.sh")
+                .header("Content-Type", "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let text = String::from_utf8(body.to_vec()).unwrap();
+    assert!(text.contains("<p>hello</p>"));
+    assert!(text.contains("<p>world</p>"));
+}
+
+#[tokio::test]
+async fn render_accepts_form_encoded_data() {
+    let app = app_with_script("cat.sh", "#!/bin/sh\ncat").await;
+
+    let response = app
+        .oneshot(
+            Request::post("/render/cat.sh")
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .body(Body::from("name=alice&color=blue"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let text = String::from_utf8(body.to_vec()).unwrap();
+    assert!(text.contains("alice"));
+    assert!(text.contains("blue"));
+}
+
+#[tokio::test]
+async fn render_accepts_json_with_data_field() {
+    let app = app_with_script("cat.sh", "#!/bin/sh\ncat").await;
+
+    let response = app
+        .oneshot(
+            Request::post("/render/cat.sh")
+                .header("Content-Type", "application/json")
+                .body(Body::from(r#"{"data": {"greeting": "hi"}}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let text = String::from_utf8(body.to_vec()).unwrap();
+    assert!(text.contains("greeting"));
+    assert!(text.contains("hi"));
+}
+
+#[tokio::test]
+async fn render_nonexistent_script_returns_error() {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let container = potato_server::container::AppContainer::start("debian:bookworm-slim")
+        .await
+        .expect("failed to start container");
+    let app = potato_server::app_router(dir, Some(container.id));
+
+    let response = app
+        .oneshot(
+            Request::post("/render/nonexistent.sh")
+                .header("Content-Type", "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let status = response.status().as_u16();
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let text = String::from_utf8(body.to_vec()).unwrap();
+    // The exec fails — either returns error status or error message in body
+    assert!(
+        status >= 400
+            || text.contains("no such file")
+            || text.contains("not found")
+            || text.contains("exec failed"),
+        "expected error for nonexistent script, got status={status} body={text}"
+    );
+}
+
+// --- /files tests ---
 
 #[rstest]
 #[tokio::test]
