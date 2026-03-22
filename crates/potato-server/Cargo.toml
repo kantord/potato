@@ -28,4 +28,4 @@ potato-transport = { path = "../potato-transport" }
 hyper = "=1.8.1"
 http-body-util = "=0.1.3"
 tower = { version = "=0.5.3", features = ["util"] }
-rstest = "=0.25.0"
+rstest = "=0.26.1"
