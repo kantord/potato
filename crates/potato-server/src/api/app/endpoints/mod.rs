@@ -1,2 +1,2 @@
-pub(crate) mod create_call;
-pub(crate) mod send_stdin;
+pub(crate) mod call;
+pub(crate) mod stdin;

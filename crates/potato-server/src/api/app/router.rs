@@ -14,8 +14,8 @@ pub fn app_router(static_dir: PathBuf, container_id: Option<String>) -> Router {
         stdin_writers: Arc::new(Mutex::new(HashMap::new())),
     };
     Router::new()
-        .route("/calls", post(endpoints::create_call::handler))
-        .route("/calls/{id}/stdin", post(endpoints::send_stdin::handler))
+        .route("/calls", post(endpoints::call::handler))
+        .route("/calls/{id}/stdin", post(endpoints::stdin::handler))
         .nest_service("/files", ServeDir::new(static_dir))
         .with_state(state)
 }
