@@ -6,12 +6,12 @@ describe("Book Search App", () => {
   });
 
   it("shows subtitle mentioning Alice", async () => {
-    const subtitle = await $(".subtitle");
+    const subtitle = await $("em");
     expect(await subtitle.getText()).toContain("Alice");
   });
 
   it("has a search input and button", async () => {
-    const input = await $("#query");
+    const input = await $("input[name='query']");
     expect(await input.isDisplayed()).toBe(true);
 
     const button = await $("button=Search");
@@ -19,7 +19,7 @@ describe("Book Search App", () => {
   });
 
   it("finds results for 'rabbit'", async () => {
-    const input = await $("#query");
+    const input = await $("input[name='query']");
     await input.setValue("rabbit");
 
     const button = await $("button=Search");
@@ -36,7 +36,7 @@ describe("Book Search App", () => {
   });
 
   it("finds results for 'queen'", async () => {
-    const input = await $("#query");
+    const input = await $("input[name='query']");
     await input.setValue("queen");
 
     const button = await $("button=Search");
@@ -53,7 +53,7 @@ describe("Book Search App", () => {
   });
 
   it("shows no results for nonsense query", async () => {
-    const input = await $("#query");
+    const input = await $("input[name='query']");
     await input.setValue("xyzzyflurbo");
 
     const button = await $("button=Search");
@@ -70,7 +70,7 @@ describe("Book Search App", () => {
   });
 
   it("is case insensitive", async () => {
-    const input = await $("#query");
+    const input = await $("input[name='query']");
     await input.setValue("ALICE");
 
     const button = await $("button=Search");
