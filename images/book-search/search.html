@@ -1,6 +1,6 @@
 {% for line in lines %}
-<div class="result">{{ line }}</div>
+<pre><code>{{ line }}</code></pre>
 {% endfor %}
 {% if not lines %}
-<div class="no-results">No results found.</div>
+<p><em>No results found.</em></p>
 {% endif %}
