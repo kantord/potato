@@ -1,12 +1,21 @@
 use bollard::Docker;
+use bollard::container::LogOutput;
+use bollard::exec::{CreateExecOptions, StartExecResults};
 use bollard::models::ContainerCreateBody;
 use bollard::query_parameters::{CreateContainerOptions, RemoveContainerOptions};
-use futures_util::StreamExt;
+use futures_util::{Stream, StreamExt};
 use std::path::PathBuf;
+use std::pin::Pin;
 
 /// A running app container.
 pub struct AppContainer {
     pub id: String,
+}
+
+/// The attached streams from an exec call.
+pub struct ExecAttached {
+    pub output: Pin<Box<dyn Stream<Item = Result<LogOutput, bollard::errors::Error>> + Send>>,
+    pub input: Box<dyn tokio::io::AsyncWrite + Send + Unpin>,
 }
 
 impl AppContainer {
@@ -34,6 +43,34 @@ impl AppContainer {
         docker.start_container(&container.id, None).await?;
 
         Ok(Self { id: container.id })
+    }
+
+    /// Execute a command in the container and return attached stdin/stdout/stderr.
+    pub async fn exec(&self, cmd: Vec<String>) -> anyhow::Result<ExecAttached> {
+        let docker = Docker::connect_with_local_defaults()?;
+
+        let exec = docker
+            .create_exec(
+                &self.id,
+                CreateExecOptions {
+                    cmd: Some(cmd),
+                    attach_stdout: Some(true),
+                    attach_stderr: Some(true),
+                    attach_stdin: Some(true),
+                    ..Default::default()
+                },
+            )
+            .await?;
+
+        match docker.start_exec(&exec.id, None).await? {
+            StartExecResults::Attached { output, input } => Ok(ExecAttached {
+                output: Box::pin(output),
+                input: Box::new(input),
+            }),
+            StartExecResults::Detached => {
+                anyhow::bail!("exec started in detached mode")
+            }
+        }
     }
 
     /// Stop and remove the container.
