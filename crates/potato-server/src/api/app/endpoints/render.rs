@@ -1,6 +1,5 @@
 use axum::Json;
 use axum::extract::State;
-use axum::http::HeaderMap;
 use axum::response::{Html, IntoResponse, Response};
 use bollard::container::LogOutput;
 use futures_util::StreamExt;
@@ -18,7 +17,6 @@ pub(crate) struct RenderRequest {
 
 pub(crate) async fn handler(
     State(state): State<AppState>,
-    headers: HeaderMap,
     Json(body): Json<RenderRequest>,
 ) -> Response {
     let container_id = match &state.container_id {
@@ -69,19 +67,6 @@ pub(crate) async fn handler(
         }
     }
 
-    let wants_html = headers
-        .get("accept")
-        .and_then(|v| v.to_str().ok())
-        .is_some_and(|v| v.contains("text/html"));
-
-    if !wants_html {
-        let json_output: Vec<serde_json::Value> = output_lines
-            .iter()
-            .filter_map(|line| serde_json::from_str(line).ok())
-            .collect();
-        return Json(json_output).into_response();
-    }
-
     // Look for a template matching the script name in /app/templates/
     let script_name = body.cmd.first().map(|s| s.as_str()).unwrap_or("");
     let template_name = script_name
@@ -96,6 +81,7 @@ pub(crate) async fn handler(
     let template_content = match std::fs::read_to_string(&template_file) {
         Ok(t) => t,
         Err(_) => {
+            // No template — return plain text
             return output_lines.join("\n").into_response();
         }
     };

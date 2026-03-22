@@ -81,15 +81,10 @@ impl PotatoApp {
         Ok(())
     }
 
-    /// Render a command's output through a template. Pass `accept` header to control format.
-    pub async fn render(&self, body: &str, accept: &str) -> anyhow::Result<Vec<u8>> {
+    /// Render a command's output through a template.
+    pub async fn render(&self, body: &str) -> anyhow::Result<Vec<u8>> {
         self.conn
-            .fetch_with_headers(
-                "POST",
-                "/render",
-                Some(body.as_bytes()),
-                &[("Accept", accept)],
-            )
+            .fetch("POST", "/render", Some(body.as_bytes()))
             .await
     }
 
