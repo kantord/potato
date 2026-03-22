@@ -73,6 +73,41 @@ impl AppContainer {
         }
     }
 
+    /// Run a command, send optional stdin, and collect all stdout lines.
+    pub async fn run(
+        &self,
+        cmd: Vec<String>,
+        stdin_data: Option<&serde_json::Value>,
+    ) -> anyhow::Result<Vec<String>> {
+        use tokio::io::AsyncWriteExt;
+
+        let attached = self.exec(cmd).await?;
+
+        let mut input = attached.input;
+        if let Some(data) = stdin_data {
+            let line = serde_json::to_string(data).unwrap() + "\n";
+            let _ = input.write_all(line.as_bytes()).await;
+        }
+        let _ = input.shutdown().await;
+        drop(input);
+
+        let mut lines = Vec::new();
+        let mut output = attached.output;
+        while let Some(Ok(log)) = output.next().await {
+            let text = match &log {
+                LogOutput::StdOut { message } => String::from_utf8_lossy(message).to_string(),
+                _ => continue,
+            };
+            for line in text.lines() {
+                if !line.is_empty() {
+                    lines.push(line.to_string());
+                }
+            }
+        }
+
+        Ok(lines)
+    }
+
     /// Stop and remove the container.
     pub async fn stop(&self) {
         if let Ok(docker) = Docker::connect_with_local_defaults() {

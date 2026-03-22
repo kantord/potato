@@ -2,9 +2,6 @@ use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::HeaderMap;
 use axum::response::{Html, IntoResponse, Response};
-use bollard::container::LogOutput;
-use futures_util::StreamExt;
-use tokio::io::AsyncWriteExt;
 
 use super::super::state::AppState;
 use crate::container::AppContainer;
@@ -21,7 +18,6 @@ fn parse_stdin_data(headers: &HeaderMap, body: &[u8]) -> Option<serde_json::Valu
         .unwrap_or("");
 
     if content_type.contains("application/x-www-form-urlencoded") {
-        // Parse form fields into a JSON object
         let pairs: Vec<(String, String)> = form_urlencoded::parse(body)
             .map(|(k, v)| (k.into_owned(), v.into_owned()))
             .collect();
@@ -31,7 +27,6 @@ fn parse_stdin_data(headers: &HeaderMap, body: &[u8]) -> Option<serde_json::Valu
         }
         Some(serde_json::Value::Object(map))
     } else {
-        // Try JSON — look for {"data": ...} wrapper or use as-is
         let parsed: serde_json::Value = serde_json::from_slice(body).ok()?;
         if let Some(data) = parsed.get("data") {
             Some(data.clone())
@@ -60,8 +55,10 @@ pub(crate) async fn handler(
 
     let container = AppContainer { id: container_id };
     let resolved_cmd = crate::utils::resolve_cmd(std::slice::from_ref(&script));
-    let attached = match container.exec(resolved_cmd).await {
-        Ok(a) => a,
+    let stdin_data = parse_stdin_data(&headers, &body);
+
+    let output_lines = match container.run(resolved_cmd, stdin_data.as_ref()).await {
+        Ok(lines) => lines,
         Err(e) => {
             return (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
@@ -70,31 +67,6 @@ pub(crate) async fn handler(
                 .into_response();
         }
     };
-
-    // Send stdin if provided
-    let stdin_data = parse_stdin_data(&headers, &body);
-    let mut input = attached.input;
-    if let Some(data) = &stdin_data {
-        let line = serde_json::to_string(data).unwrap() + "\n";
-        let _ = input.write_all(line.as_bytes()).await;
-    }
-    let _ = input.shutdown().await;
-    drop(input);
-
-    // Collect output
-    let mut output_lines: Vec<String> = Vec::new();
-    let mut output = attached.output;
-    while let Some(Ok(log)) = output.next().await {
-        let text = match &log {
-            LogOutput::StdOut { message } => String::from_utf8_lossy(message).to_string(),
-            _ => continue,
-        };
-        for line in text.lines() {
-            if !line.is_empty() {
-                output_lines.push(line.to_string());
-            }
-        }
-    }
 
     // Look for a template matching the script name in /app/templates/
     let template_name = script
