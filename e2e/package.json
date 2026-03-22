@@ -2,7 +2,9 @@
   "name": "potato-e2e",
   "private": true,
   "scripts": {
-    "test": "wdio run wdio.conf.ts"
+    "test": "wdio run wdio.conf.ts",
+    "test:book-search": "wdio run wdio.book-search.conf.ts",
+    "test:all": "wdio run wdio.conf.ts && wdio run wdio.book-search.conf.ts"
   },
   "devDependencies": {
     "@types/node": "24.12.0",
