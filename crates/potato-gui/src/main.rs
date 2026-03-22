@@ -29,7 +29,8 @@ async fn create_call(
         .call(&cmd, |event| {
             let _ = on_event.send(event.to_json());
         })
-        .await;
+        .await
+        .map_err(|e| e.to_string())?;
 
     Ok(())
 }
@@ -66,6 +67,7 @@ fn main() {
         std::process::exit(1);
     });
     let protocol_app = app.clone();
+    let protocol_rt = std::sync::Arc::new(rt);
 
     tauri::Builder::default()
         .register_uri_scheme_protocol("potato", move |_ctx, request| {
@@ -75,8 +77,7 @@ fn main() {
                 path = "/index.html".to_string();
             }
 
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            match rt.block_on(protocol_app.fetch_file(&path)) {
+            match protocol_rt.block_on(protocol_app.fetch_file(&path)) {
                 Ok(response_body) => tauri::http::Response::builder()
                     .status(200)
                     .header(
@@ -86,12 +87,12 @@ fn main() {
                             .as_ref(),
                     )
                     .body(response_body)
-                    .unwrap(),
+                    .expect("valid HTTP response"),
                 Err(e) => tauri::http::Response::builder()
                     .status(500)
                     .header("Content-Type", "text/plain")
                     .body(e.to_string().into_bytes())
-                    .unwrap(),
+                    .expect("valid HTTP response"),
             }
         })
         .invoke_handler(tauri::generate_handler![create_call, send_call_stdin])

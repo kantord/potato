@@ -44,7 +44,11 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         })
-        .await;
+        .await
+        .unwrap_or_else(|e| {
+            eprintln!("failed to connect: {e}");
+            std::process::exit(1);
+        });
     });
 
     let call_id = match call_id_rx.await {

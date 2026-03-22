@@ -156,14 +156,11 @@ impl PotatoConnection {
         path: &str,
         body: Option<&[u8]>,
         mut on_line: impl FnMut(&str),
-    ) {
-        let response = match self.request_raw(method, path, body).await {
-            Ok(r) => r,
-            Err(e) => {
-                eprintln!("failed to connect: {e}");
-                std::process::exit(1);
-            }
-        };
+    ) -> anyhow::Result<()> {
+        let response = self
+            .request_raw(method, path, body)
+            .await
+            .context("failed to connect")?;
 
         let mut body = response.into_body();
         let mut buffer = String::new();
@@ -181,6 +178,8 @@ impl PotatoConnection {
         }
 
         on_line(r#"{"event":"end"}"#);
+
+        Ok(())
     }
 
     /// Stream SSE events. Calls `on_event` for each parsed event.
@@ -190,13 +189,13 @@ impl PotatoConnection {
         path: &str,
         body: Option<&[u8]>,
         mut on_event: impl FnMut(SseEvent),
-    ) {
+    ) -> anyhow::Result<()> {
         self.stream_raw(method, path, body, |data| {
             if let Some(event) = parse_sse_line(data) {
                 on_event(event);
             }
         })
-        .await;
+        .await
     }
 }
 

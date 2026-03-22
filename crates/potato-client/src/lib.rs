@@ -58,7 +58,7 @@ pub struct PotatoApp {
 impl PotatoApp {
     /// Start a call and stream events. The `on_event` callback receives each event
     /// including the initial `Started` event with the `call_id`.
-    pub async fn call(&self, cmd: &[String], on_event: impl FnMut(SseEvent)) {
+    pub async fn call(&self, cmd: &[String], on_event: impl FnMut(SseEvent)) -> anyhow::Result<()> {
         let body = serde_json::json!({ "cmd": cmd });
         self.conn
             .stream(
@@ -67,7 +67,7 @@ impl PotatoApp {
                 Some(body.to_string().as_bytes()),
                 on_event,
             )
-            .await;
+            .await
     }
 
     /// Send input to a running call.
