@@ -29,9 +29,10 @@
       });
     }
 
-    // Intercept POST /render
-    if (url === "/render" && method === "POST") {
-      return invoke("render", { body: init.body || "{}" }).then(function (text) {
+    // Intercept POST /render/{script}
+    var renderMatch = url.match(/^\/render\/(.+)$/);
+    if (renderMatch && method === "POST") {
+      return invoke("render", { script: renderMatch[1], body: init.body || "{}" }).then(function (text) {
         return new Response(text, {
           status: 200,
           headers: { "Content-Type": "text/html" },
@@ -67,9 +68,10 @@
     };
 
     xhr.send = function (body) {
-      // Intercept POST /render
-      if (_url === "/render" && _method.toUpperCase() === "POST") {
-        invoke("render", { body: body || "{}" })
+      // Intercept POST /render/{script}
+      var renderMatch = _url.match(/^\/render\/(.+)$/);
+      if (renderMatch && _method.toUpperCase() === "POST") {
+        invoke("render", { script: renderMatch[1], body: body || "{}" })
           .then(function (text) {
             Object.defineProperty(xhr, "status", { get: function () { return 200; } });
             Object.defineProperty(xhr, "responseText", { get: function () { return text; } });

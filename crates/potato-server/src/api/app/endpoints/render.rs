@@ -1,5 +1,5 @@
 use axum::Json;
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::response::{Html, IntoResponse, Response};
 use bollard::container::LogOutput;
 use futures_util::StreamExt;
@@ -10,13 +10,13 @@ use crate::container::AppContainer;
 
 #[derive(serde::Deserialize)]
 pub(crate) struct RenderRequest {
-    cmd: Vec<String>,
     #[serde(default)]
     data: Option<serde_json::Value>,
 }
 
 pub(crate) async fn handler(
     State(state): State<AppState>,
+    Path(script): Path<String>,
     Json(body): Json<RenderRequest>,
 ) -> Response {
     let container_id = match &state.container_id {
@@ -31,7 +31,7 @@ pub(crate) async fn handler(
     };
 
     let container = AppContainer { id: container_id };
-    let resolved_cmd = crate::utils::resolve_cmd(&body.cmd);
+    let resolved_cmd = crate::utils::resolve_cmd(std::slice::from_ref(&script));
     let attached = match container.exec(resolved_cmd).await {
         Ok(a) => a,
         Err(e) => {
@@ -68,11 +68,10 @@ pub(crate) async fn handler(
     }
 
     // Look for a template matching the script name in /app/templates/
-    let script_name = body.cmd.first().map(|s| s.as_str()).unwrap_or("");
-    let template_name = script_name
+    let template_name = script
         .trim_start_matches('/')
         .strip_suffix(".sh")
-        .unwrap_or(script_name.trim_start_matches('/'))
+        .unwrap_or(script.trim_start_matches('/'))
         .to_string()
         + ".html";
 
@@ -81,7 +80,6 @@ pub(crate) async fn handler(
     let template_content = match std::fs::read_to_string(&template_file) {
         Ok(t) => t,
         Err(_) => {
-            // No template — return plain text
             return output_lines.join("\n").into_response();
         }
     };

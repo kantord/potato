@@ -18,7 +18,7 @@ pub fn app_router(static_dir: PathBuf, container_id: Option<String>) -> Router {
     Router::new()
         .route("/calls", post(endpoints::call::handler))
         .route("/calls/{id}/stdin", post(endpoints::stdin::handler))
-        .route("/render", post(endpoints::render::handler))
+        .route("/render/{script}", post(endpoints::render::handler))
         .nest_service("/files", ServeDir::new(gui_dir))
         .with_state(state)
 }

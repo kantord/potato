@@ -55,8 +55,16 @@ async fn send_call_stdin(
 }
 
 #[tauri::command]
-async fn render(state: tauri::State<'_, AppState>, body: String) -> Result<String, String> {
-    let response = state.0.render(&body).await.map_err(|e| e.to_string())?;
+async fn render(
+    state: tauri::State<'_, AppState>,
+    script: String,
+    body: String,
+) -> Result<String, String> {
+    let response = state
+        .0
+        .render(&script, &body)
+        .await
+        .map_err(|e| e.to_string())?;
     String::from_utf8(response).map_err(|e| format!("invalid response: {e}"))
 }
 
