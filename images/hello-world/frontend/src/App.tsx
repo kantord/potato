@@ -62,7 +62,7 @@ function App() {
 
   async function calc(op: string) {
     setResult("Calculating...");
-    await runCommand(["/calculate.sh"], { a: parseFloat(a), b: parseFloat(b), op }, (event, data) => {
+    await runCommand(["calculate.sh"], { a: parseFloat(a), b: parseFloat(b), op }, (event, data) => {
       if (event === "error") {
         setResult("Error: " + JSON.stringify(data));
       } else if (event === "output") {
@@ -79,7 +79,7 @@ function App() {
     let count = 0;
     while (performance.now() - start < duration) {
       await runCommand(
-        ["/calculate.sh"],
+        ["calculate.sh"],
         { a: 2, b: 3, op: "add" },
         () => {}
       );

@@ -7,7 +7,7 @@ use tower::ServiceExt;
 
 #[fixture]
 async fn app() -> axum::Router {
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
     let container = potato_server::container::AppContainer::start("debian:bookworm-slim")
         .await
         .expect("failed to start container");
@@ -57,12 +57,13 @@ fn non_started_events(events: Vec<serde_json::Value>) -> Vec<serde_json::Value> 
         .collect()
 }
 
+// Commands with absolute paths bypass resolve_cmd
 #[rstest]
-#[case::date(vec!["date"], "output", None)]
-#[case::echo(vec!["echo", "hello"], "output", Some(serde_json::json!("hello")))]
-#[case::stderr(vec!["sh", "-c", "echo oops >&2"], "error", None)]
+#[case::date(vec!["/bin/date"], "output", None)]
+#[case::echo(vec!["/bin/echo", "hello"], "output", Some(serde_json::json!("hello")))]
+#[case::stderr(vec!["/bin/sh", "-c", "echo oops >&2"], "error", None)]
 #[case::pretagged(
-    vec!["echo", r#"{"event":"progress","data":{"percent":50}}"#],
+    vec!["/bin/echo", r#"{"event":"progress","data":{"percent":50}}"#],
     "progress",
     Some(serde_json::json!({"percent": 50}))
 )]
@@ -84,7 +85,7 @@ async fn call_produces_expected_event(
 #[rstest]
 #[tokio::test]
 async fn call_ends_with_end_event(#[future] app: axum::Router) {
-    let events = non_started_events(call_and_get_events(app.await, vec!["echo", "hi"]).await);
+    let events = non_started_events(call_and_get_events(app.await, vec!["/bin/echo", "hi"]).await);
     let last = events.last().unwrap();
     assert_eq!(last["event"], "end");
 }
@@ -92,7 +93,7 @@ async fn call_ends_with_end_event(#[future] app: axum::Router) {
 #[rstest]
 #[tokio::test]
 async fn call_started_event_contains_call_id(#[future] app: axum::Router) {
-    let events = call_and_get_events(app.await, vec!["echo", "hi"]).await;
+    let events = call_and_get_events(app.await, vec!["/bin/echo", "hi"]).await;
     let started = events
         .iter()
         .find(|e| e["event"] == "started")
@@ -118,7 +119,7 @@ async fn files_serves_static_content(#[future] app: axum::Router) {
     let response = app
         .await
         .oneshot(
-            Request::get("/files/Cargo.toml")
+            Request::get("/files/index.html")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -129,7 +130,7 @@ async fn files_serves_static_content(#[future] app: axum::Router) {
 
     let body = response.into_body().collect().await.unwrap().to_bytes();
     let text = String::from_utf8(body.to_vec()).unwrap();
-    assert!(text.contains("[package]"));
+    assert!(text.contains("<h1>test</h1>"));
 }
 
 #[rstest]

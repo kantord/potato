@@ -173,7 +173,7 @@
             sendBtn.disabled = true;
             const botMsg = addMessage('', 'bot');
             let words = [];
-            await streamCall(['/chat.sh'], { message: text }, function(event, data) {
+            await streamCall(['chat.sh'], { message: text }, function(event, data) {
                 if (event === 'output' && data) {
                     words.push(data);
                     botMsg.textContent = words.join(' ');
@@ -193,7 +193,7 @@
             for (let r = 0; r < rounds; r++) {
                 const start = performance.now();
                 let firstWordTime = 0, wordCount = 0;
-                await streamCall(['/bench.sh'], {}, function(event, data) {
+                await streamCall(['bench.sh'], {}, function(event, data) {
                     if (event === 'output' && data) {
                         wordCount++;
                         if (firstWordTime === 0) firstWordTime = performance.now() - start;
@@ -228,7 +228,7 @@
             const res = await fetch('/calls', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cmd: ['/echo.sh'] })
+                body: JSON.stringify({ cmd: ['echo.sh'] })
             });
             const reader = res.body.getReader();
             const decoder = new TextDecoder();

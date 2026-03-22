@@ -34,7 +34,8 @@ pub(crate) async fn handler(
         };
 
         let container = AppContainer { id: container_id };
-        let attached = match container.exec(body.cmd).await {
+        let resolved_cmd = crate::utils::resolve_cmd(&body.cmd);
+        let attached = match container.exec(resolved_cmd).await {
             Ok(a) => a,
             Err(e) => return stream.error(&format!("failed to exec: {e}")).await,
         };

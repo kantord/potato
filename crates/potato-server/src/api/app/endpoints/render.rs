@@ -33,7 +33,8 @@ pub(crate) async fn handler(
     };
 
     let container = AppContainer { id: container_id };
-    let attached = match container.exec(body.cmd.clone()).await {
+    let resolved_cmd = crate::utils::resolve_cmd(&body.cmd);
+    let attached = match container.exec(resolved_cmd).await {
         Ok(a) => a,
         Err(e) => {
             return (
@@ -74,7 +75,6 @@ pub(crate) async fn handler(
         .is_some_and(|v| v.contains("text/html"));
 
     if !wants_html {
-        // Return raw JSON output
         let json_output: Vec<serde_json::Value> = output_lines
             .iter()
             .filter_map(|line| serde_json::from_str(line).ok())
@@ -82,21 +82,20 @@ pub(crate) async fn handler(
         return Json(json_output).into_response();
     }
 
-    // Look for a template matching the script name
+    // Look for a template matching the script name in /app/templates/
     let script_name = body.cmd.first().map(|s| s.as_str()).unwrap_or("");
-    let template_path = script_name
+    let template_name = script_name
+        .trim_start_matches('/')
         .strip_suffix(".sh")
-        .unwrap_or(script_name)
+        .unwrap_or(script_name.trim_start_matches('/'))
         .to_string()
         + ".html";
 
-    let static_dir = &state.static_dir;
-    let template_file = static_dir.join(template_path.trim_start_matches('/'));
+    let template_file = state.static_dir.join("app/templates").join(&template_name);
 
     let template_content = match std::fs::read_to_string(&template_file) {
         Ok(t) => t,
         Err(_) => {
-            // No template found — return plain text
             return output_lines.join("\n").into_response();
         }
     };
@@ -105,7 +104,6 @@ pub(crate) async fn handler(
     let output_data: serde_json::Value = if output_lines.len() == 1 {
         serde_json::from_str(&output_lines[0]).unwrap_or(serde_json::json!(output_lines[0]))
     } else {
-        // Try to parse each line as JSON, fall back to strings
         let items: Vec<serde_json::Value> = output_lines
             .iter()
             .map(|line| serde_json::from_str(line).unwrap_or(serde_json::json!(line)))
@@ -113,7 +111,6 @@ pub(crate) async fn handler(
         serde_json::json!({ "lines": items })
     };
 
-    // Render template
     let env = minijinja::Environment::new();
     match env.render_str(&template_content, &output_data) {
         Ok(html) => Html(html).into_response(),
