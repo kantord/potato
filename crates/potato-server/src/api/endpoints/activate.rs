@@ -1,18 +1,14 @@
-use axum::{
-    Json, Router,
-    extract::State,
-    routing::{get, post},
-};
+use axum::{Json, extract::State};
 
 use crate::app_manager::{AppManager, RunningApp};
 use crate::container::{AppContainer, extract_image};
 
 #[derive(serde::Deserialize)]
-struct ActivateRequest {
+pub(crate) struct ActivateRequest {
     image: String,
 }
 
-async fn activate_handler(
+pub(crate) async fn handler(
     State(manager): State<AppManager>,
     Json(body): Json<ActivateRequest>,
 ) -> Json<serde_json::Value> {
@@ -56,16 +52,4 @@ async fn activate_handler(
         .await;
 
     Json(serde_json::json!({"ok": true, "status": "activated"}))
-}
-
-async fn list_apps_handler(State(manager): State<AppManager>) -> Json<serde_json::Value> {
-    let names = manager.list().await;
-    Json(serde_json::json!({"apps": names}))
-}
-
-pub fn management_app(manager: AppManager) -> Router<()> {
-    Router::new()
-        .route("/activate", post(activate_handler))
-        .route("/apps", get(list_apps_handler))
-        .with_state(manager)
 }
