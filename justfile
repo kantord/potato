@@ -1,6 +1,6 @@
 # Build the GUI polyfill (TypeScript → IIFE)
 polyfill:
-    cd crates/potato-gui/frontend && pnpm install && pnpm build
+    cd crates/potato-gui && pnpm install && pnpm build
 
 # Build all Rust crates (builds polyfill first)
 build: polyfill

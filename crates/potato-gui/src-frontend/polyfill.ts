@@ -1,3 +1,5 @@
+export {}; // Make this a module so `declare global` works
+
 declare global {
   interface Window {
     __TAURI__: {
@@ -20,26 +22,21 @@ window.fetch = function (input: RequestInfo | URL, init?: RequestInit): Promise<
   const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
   const method = init?.method || "GET";
 
-  // Intercept POST /calls — stream via Channel (returns SSE with started event)
   if (url === "/calls" && method === "POST") {
     return streamViaChannel("create_call", { body: init?.body || "{}" });
   }
 
-  // Intercept POST /calls/{id}/stdin — forward via command
   const stdinMatch = url.match(/^\/calls\/([^/]+)\/stdin$/);
   if (stdinMatch && method === "POST") {
     return invoke("send_call_stdin", {
       callId: stdinMatch[1],
       data: init?.body || "{}",
-    }).then((text) => {
-      return new Response(text, {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    });
+    }).then((text: string) => new Response(text, {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
   }
 
-  // Intercept POST /render/{script}
   const renderMatch = url.match(/^\/render\/(.+)$/);
   if (renderMatch && method === "POST") {
     const headers = init?.headers as Record<string, string> | undefined;
@@ -48,15 +45,12 @@ window.fetch = function (input: RequestInfo | URL, init?: RequestInit): Promise<
       script: renderMatch[1],
       body: init?.body || "{}",
       contentType: ct,
-    }).then((text) => {
-      return new Response(text, {
-        status: 200,
-        headers: { "Content-Type": "text/html" },
-      });
-    });
+    }).then((text: string) => new Response(text, {
+      status: 200,
+      headers: { "Content-Type": "text/html" },
+    }));
   }
 
-  // Everything else — native fetch
   return nativeFetch.call(window, input, init);
 } as typeof fetch;
 
@@ -87,7 +81,6 @@ window.XMLHttpRequest = function (this: XMLHttpRequest) {
   };
 
   xhr.send = function (body?: Document | XMLHttpRequestBodyInit | null) {
-    // Intercept POST /render/{script}
     const renderMatch = _url.match(/^\/render\/(.+)$/);
     if (renderMatch && _method.toUpperCase() === "POST") {
       invoke("render", {
@@ -95,7 +88,7 @@ window.XMLHttpRequest = function (this: XMLHttpRequest) {
         body: body || "{}",
         contentType: _contentType,
       })
-        .then((text) => {
+        .then((text: string) => {
           Object.defineProperty(xhr, "status", { get: () => 200, configurable: true });
           Object.defineProperty(xhr, "responseText", { get: () => text, configurable: true });
           Object.defineProperty(xhr, "response", { get: () => text, configurable: true });
@@ -110,7 +103,6 @@ window.XMLHttpRequest = function (this: XMLHttpRequest) {
       return;
     }
 
-    // Everything else — use native XHR
     origSend(body);
   };
 
@@ -131,13 +123,13 @@ function streamViaChannel(command: string, args: Record<string, unknown>): Promi
             controller.close();
             return;
           }
-        } catch {}
+        } catch { /* ignore parse errors */ }
         controller.enqueue(encoder.encode("data:" + data + "\n\n"));
       };
 
       args.onEvent = channel;
 
-      invoke(command, args).catch((err) => {
+      invoke(command, args).catch((err: unknown) => {
         controller.error(err);
       });
     },

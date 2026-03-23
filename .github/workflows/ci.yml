@@ -44,7 +44,7 @@ jobs:
           node-version: 22
 
       - name: Build polyfill
-        run: cd crates/potato-gui/frontend && pnpm install && pnpm build
+        run: cd crates/potato-gui && pnpm install && pnpm build
 
       - name: Build
         run: cargo build
@@ -82,7 +82,7 @@ jobs:
           node-version: 22
 
       - name: Build polyfill
-        run: cd crates/potato-gui/frontend && pnpm install && pnpm build
+        run: cd crates/potato-gui && pnpm install && pnpm build
 
       - name: Pull Docker image
         run: docker pull debian:bookworm-slim
@@ -132,7 +132,7 @@ jobs:
           docker build -t potato-book-search images/book-search
 
       - name: Build polyfill
-        run: cd crates/potato-gui/frontend && pnpm install && pnpm build
+        run: cd crates/potato-gui && pnpm install && pnpm build
 
       - name: Build Rust
         run: cargo build
