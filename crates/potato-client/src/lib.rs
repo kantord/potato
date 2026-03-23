@@ -81,25 +81,20 @@ impl PotatoApp {
         Ok(())
     }
 
-    /// Forward a request to the app server and return the response body.
+    /// Forward a raw request to the app server.
     pub async fn forward(
         &self,
         method: &str,
         path: &str,
         body: Option<&[u8]>,
-        content_type: Option<&str>,
+        headers: &[(&str, &str)],
     ) -> anyhow::Result<Vec<u8>> {
-        match content_type {
-            Some(ct) => {
-                self.conn
-                    .fetch_with_headers(method, path, body, &[("Content-Type", ct)])
-                    .await
-            }
-            None => self.conn.fetch(method, path, body).await,
-        }
+        self.conn
+            .fetch_with_headers(method, path, body, headers)
+            .await
     }
 
-    /// Forward a request to the app server and stream events via callback.
+    /// Forward a raw request and stream events via callback.
     pub async fn stream_forward(
         &self,
         method: &str,

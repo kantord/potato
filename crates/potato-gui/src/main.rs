@@ -17,9 +17,13 @@ async fn forward(
     content_type: Option<String>,
 ) -> Result<String, String> {
     let body_bytes = body.as_deref().map(|b| b.as_bytes());
+    let headers: Vec<(&str, &str)> = content_type
+        .as_deref()
+        .map(|ct| vec![("Content-Type", ct)])
+        .unwrap_or_default();
     let response = state
         .0
-        .forward(&method, &path, body_bytes, content_type.as_deref())
+        .forward(&method, &path, body_bytes, &headers)
         .await
         .map_err(|e| e.to_string())?;
     String::from_utf8(response).map_err(|e| format!("invalid response: {e}"))
