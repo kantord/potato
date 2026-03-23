@@ -3,8 +3,13 @@ use axum::extract::{Path, State};
 use axum::http::HeaderMap;
 use axum::response::{Html, IntoResponse, Response};
 
+use std::sync::LazyLock;
+
 use super::super::state::AppState;
 use crate::container::AppContainer;
+
+static TEMPLATE_ENGINE: LazyLock<minijinja::Environment<'static>> =
+    LazyLock::new(minijinja::Environment::new);
 
 /// Parse stdin data from either JSON or form-encoded body.
 fn parse_stdin_data(headers: &HeaderMap, body: &[u8]) -> Option<serde_json::Value> {
@@ -96,8 +101,7 @@ pub(crate) async fn handler(
         serde_json::json!({ "lines": items })
     };
 
-    let env = minijinja::Environment::new();
-    match env.render_str(&template_content, &output_data) {
+    match TEMPLATE_ENGINE.render_str(&template_content, &output_data) {
         Ok(html) => Html(html).into_response(),
         Err(e) => (
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
