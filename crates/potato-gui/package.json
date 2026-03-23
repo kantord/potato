@@ -11,12 +11,12 @@
     "tauri": "tauri"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2",
-    "typescript": "~5.9.3",
-    "vite": "^6.0.0"
+    "@tauri-apps/cli": "2.10.1",
+    "typescript": "5.9.3",
+    "vite": "6.4.1"
   },
   "dependencies": {
-    "@mswjs/interceptors": "^0.41.3",
-    "@tauri-apps/api": "^2"
+    "@mswjs/interceptors": "0.41.3",
+    "@tauri-apps/api": "2.10.1"
   }
 }

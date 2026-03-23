@@ -23,8 +23,8 @@ os_pipe = "=1.2.3"
 anyhow = "=1.0.102"
 clap = { version = "=4.6.0", features = ["derive"] }
 potato-transport = { path = "../potato-transport" }
-minijinja = "2"
-form_urlencoded = "1"
+minijinja = "=2.18.0"
+form_urlencoded = "=1.2.2"
 
 [dev-dependencies]
 hyper = "=1.8.1"
