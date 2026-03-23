@@ -33,6 +33,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build polyfill
+        run: cd crates/potato-gui/frontend && pnpm install && pnpm build
+
       - name: Build
         run: cargo build
 
@@ -57,6 +70,19 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build polyfill
+        run: cd crates/potato-gui/frontend && pnpm install && pnpm build
 
       - name: Pull Docker image
         run: docker pull debian:bookworm-slim
@@ -104,6 +130,9 @@ jobs:
           docker build -t potato-hello-world images/hello-world
           docker build -t potato-hello-simple images/hello-simple
           docker build -t potato-book-search images/book-search
+
+      - name: Build polyfill
+        run: cd crates/potato-gui/frontend && pnpm install && pnpm build
 
       - name: Build Rust
         run: cargo build

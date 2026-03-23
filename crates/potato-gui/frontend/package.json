@@ -1,0 +1,12 @@
+{
+  "name": "potato-gui-frontend",
+  "private": true,
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch"
+  },
+  "devDependencies": {
+    "vite": "^6",
+    "typescript": "^5"
+  }
+}

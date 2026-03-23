@@ -118,7 +118,7 @@ fn main() {
         .setup(move |tauri_app| {
             tauri_app.manage(AppState(app));
 
-            let polyfill = include_str!("../frontend/potato-polyfill.js");
+            let polyfill = include_str!("../frontend/dist/polyfill.js");
 
             let window = WebviewWindowBuilder::new(tauri_app, "main", Default::default())
                 .title("Potato")

@@ -1,5 +1,9 @@
-# Build all Rust crates
-build:
+# Build the GUI polyfill (TypeScript → IIFE)
+polyfill:
+    cd crates/potato-gui/frontend && pnpm install && pnpm build
+
+# Build all Rust crates (builds polyfill first)
+build: polyfill
     cargo build
 
 # Run unit and integration tests (requires Docker)
