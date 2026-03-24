@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::container::{AppContainer, extract_image};
+use crate::container::{AppContainer, PotatoImage};
 
 pub struct RunningApp {
     pub container: Option<AppContainer>,
@@ -28,9 +28,11 @@ impl AppManager {
             return Ok("already_active");
         }
 
-        let static_dir = extract_image(image).await?;
+        let potato_image = PotatoImage::new(image).await?;
 
-        let container = AppContainer::start(image).await.ok();
+        let static_dir = potato_image.extract().await?;
+
+        let container = potato_image.start().await.ok();
         let container_id = container.as_ref().map(|c| c.id.clone());
 
         let path = format!("/tmp/potato-{image}.sock");

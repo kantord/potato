@@ -19,10 +19,12 @@ Think: shell scripting, but with a desktop GUI and easier to share with others!
 
 ## How It Works
 
-A Potato app is a Docker image containing:
+A Potato app is a Docker image built on the **potato base image** (`images/base/`) containing:
 
 1. **A fully static web frontend** (HTML/JS/CSS)
 2. **"Backend" scripts or binaries** that run inside the container
+
+Potato will only load images derived from the base image.
 
 Potato takes care of wiring the backend and frontend together and running your app:
 the frontend can communicate with the backend using a streaming API - effectively,
@@ -157,7 +159,7 @@ grep -i -n "$query" /book.txt
 **`Dockerfile`**:
 
 ```dockerfile
-FROM debian:bookworm-slim
+FROM potato-base
 RUN apt-get update && apt-get install -y curl jq && rm -rf /var/lib/apt/lists/*
 
 # Download the book

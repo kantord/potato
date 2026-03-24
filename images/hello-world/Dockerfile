@@ -6,7 +6,7 @@ RUN pnpm install --frozen-lockfile
 COPY frontend/ .
 RUN pnpm build
 
-FROM debian:bookworm-slim
+FROM potato-base
 RUN apt-get update && apt-get install -y bc && rm -rf /var/lib/apt/lists/*
 COPY --from=frontend /build/dist/ /app/gui/
 COPY calculate.sh /app/bin/calculate.sh

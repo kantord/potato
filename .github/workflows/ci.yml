@@ -130,6 +130,7 @@ jobs:
       - name: Build Docker images
         run: |
           docker pull debian:bookworm-slim
+          docker build -t potato-base images/base
           docker build -t potato-hello-world images/hello-world
           docker build -t potato-hello-simple images/hello-simple
           docker build -t potato-book-search images/book-search

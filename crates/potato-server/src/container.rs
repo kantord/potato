@@ -7,6 +7,67 @@ use futures_util::{Stream, StreamExt};
 use std::path::PathBuf;
 use std::pin::Pin;
 
+const POTATO_LABEL: &str = "io.github.kantord.potato.version";
+
+/// A validated potato container image.
+pub struct PotatoImage {
+    name: String,
+}
+
+impl PotatoImage {
+    /// Validate that an image carries the potato label.
+    pub async fn new(image: &str) -> anyhow::Result<Self> {
+        let docker = Docker::connect_with_local_defaults()?;
+        let info = docker.inspect_image(image).await?;
+
+        let has_label = info
+            .config
+            .as_ref()
+            .and_then(|c| c.labels.as_ref())
+            .and_then(|labels| labels.get(POTATO_LABEL))
+            .is_some();
+
+        if !has_label {
+            anyhow::bail!("image {image} is not a potato container: missing label {POTATO_LABEL}");
+        }
+
+        Ok(Self {
+            name: image.to_string(),
+        })
+    }
+
+    /// Start a persistent container for this image.
+    pub async fn start(&self) -> anyhow::Result<AppContainer> {
+        let docker = Docker::connect_with_local_defaults()?;
+
+        let config = ContainerCreateBody {
+            image: Some(self.name.clone()),
+            cmd: Some(vec!["sleep".to_string(), "infinity".to_string()]),
+            ..Default::default()
+        };
+
+        let name = format!("potato-{}", crate::utils::generate_id());
+        let container = docker
+            .create_container(
+                Some(CreateContainerOptions {
+                    name: Some(name),
+                    ..Default::default()
+                }),
+                config,
+            )
+            .await?;
+
+        docker.start_container(&container.id, None).await?;
+
+        Ok(AppContainer { id: container.id })
+    }
+
+    /// Extract the image's filesystem to a temp directory.
+    pub async fn extract(&self) -> anyhow::Result<PathBuf> {
+        extract_image_inner(&self.name).await
+    }
+}
+
 /// A running app container.
 pub struct AppContainer {
     pub id: String,
@@ -19,8 +80,9 @@ pub struct ExecAttached {
 }
 
 impl AppContainer {
-    /// Start a persistent container for an app image.
-    pub async fn start(image: &str) -> anyhow::Result<Self> {
+    /// Start a container without label validation. For tests only.
+    #[doc(hidden)]
+    pub async fn start_unchecked(image: &str) -> anyhow::Result<Self> {
         let docker = Docker::connect_with_local_defaults()?;
 
         let config = ContainerCreateBody {
@@ -124,8 +186,7 @@ impl AppContainer {
     }
 }
 
-/// Extract an image's filesystem to a temp directory.
-pub async fn extract_image(image: &str) -> anyhow::Result<PathBuf> {
+async fn extract_image_inner(image: &str) -> anyhow::Result<PathBuf> {
     let docker = Docker::connect_with_local_defaults()?;
 
     let config = ContainerCreateBody {

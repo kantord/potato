@@ -8,7 +8,7 @@ use tower::ServiceExt;
 #[fixture]
 async fn app() -> axum::Router {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-    let container = potato_server::container::AppContainer::start("debian:bookworm-slim")
+    let container = potato_server::container::AppContainer::start_unchecked("debian:bookworm-slim")
         .await
         .expect("failed to start container");
     potato_server::app_router(dir, Some(container.id))
@@ -108,7 +108,7 @@ async fn call_started_event_contains_call_id(#[future] app: axum::Router) {
 /// Helper to create a test app with a script installed in /app/bin/
 async fn app_with_script(script_name: &str, script_content: &str) -> axum::Router {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-    let container = potato_server::container::AppContainer::start("debian:bookworm-slim")
+    let container = potato_server::container::AppContainer::start_unchecked("debian:bookworm-slim")
         .await
         .expect("failed to start container");
 
@@ -222,7 +222,7 @@ async fn render_accepts_json_with_data_field() {
 #[tokio::test]
 async fn render_nonexistent_script_returns_error() {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
-    let container = potato_server::container::AppContainer::start("debian:bookworm-slim")
+    let container = potato_server::container::AppContainer::start_unchecked("debian:bookworm-slim")
         .await
         .expect("failed to start container");
     let app = potato_server::app_router(dir, Some(container.id));
@@ -248,6 +248,23 @@ async fn render_nonexistent_script_returns_error() {
             || text.contains("exec failed"),
         "expected error for nonexistent script, got status={status} body={text}"
     );
+}
+
+// --- label validation tests ---
+
+#[tokio::test]
+async fn potato_image_rejects_unlabeled_image() {
+    let result = potato_server::container::PotatoImage::new("debian:bookworm-slim").await;
+    match result {
+        Ok(_) => panic!("expected PotatoImage::new to reject unlabeled image"),
+        Err(err) => {
+            let msg = err.to_string();
+            assert!(
+                msg.contains("potato") || msg.contains("label"),
+                "error should mention missing label, got: {msg}"
+            );
+        }
+    }
 }
 
 // --- /files tests ---
