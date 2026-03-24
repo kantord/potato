@@ -96,7 +96,7 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-6">
-      <h1 className="text-5xl font-bold">Hello from Potato!</h1>
+      <h1 className="text-5xl font-bold">Hello from SpudKit!</h1>
       <div className="flex gap-2 items-center">
         <Input
           type="number"

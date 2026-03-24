@@ -1,9 +1,9 @@
-describe("Potato Apps", () => {
+describe("SpudKit Apps", () => {
   it("hello-world app loads and shows title", async () => {
     const heading = await $("h1");
     await heading.waitForDisplayed({ timeout: 10000 });
     const text = await heading.getText();
-    expect(text).toBe("Hello from Potato!");
+    expect(text).toBe("Hello from SpudKit!");
   });
 
   it("hello-world app has calculator buttons", async () => {

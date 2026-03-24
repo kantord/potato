@@ -1,4 +1,4 @@
-FROM potato-base
+FROM spudkit-base
 COPY index.html /app/gui/index.html
 COPY chat.sh /app/bin/chat.sh
 COPY bench.sh /app/bin/bench.sh

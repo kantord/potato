@@ -1,17 +1,17 @@
-# Potato
+# SpudKit
 
 A platform for building tiny minimalistic desktop apps that can be easily
 distributed as OCI/Docker images. (For now Linux only)
 
-Potato fully takes care of the distribution of desktop apps and removes the need
+SpudKit fully takes care of the distribution of desktop apps and removes the need
 to set up a build system such as Tauri or Electron. Also removes the need to bundle
 a browser engine with your app.
 
-Potato apps run fully containerized: their "backends" is a small "serverless" CLI apps,
+SpudKit apps run fully containerized: their "backends" is a small "serverless" CLI apps,
 running inside a Docker or Podman container. The frontend runs inside your operating
 systems built-in browser engine.
 
-Since potato app's backends are just CLI apps, potato apps can still be used in
+Since SpudKit app's backends are just CLI apps, SpudKit apps can still be used in
 Unix pipelines.
 
 Think: shell scripting, but with a desktop GUI and easier to share with others!
@@ -19,20 +19,20 @@ Think: shell scripting, but with a desktop GUI and easier to share with others!
 
 ## How It Works
 
-A Potato app is a Docker image built on the **potato base image** (`images/base/`) containing:
+A SpudKit app is a Docker image built on the **spudkit base image** (`images/base/`) containing:
 
 1. **A fully static web frontend** (HTML/JS/CSS)
 2. **"Backend" scripts or binaries** that run inside the container
 
-Potato will only load images derived from the base image.
+SpudKit will only load images derived from the base image.
 
-Potato takes care of wiring the backend and frontend together and running your app:
+SpudKit takes care of wiring the backend and frontend together and running your app:
 the frontend can communicate with the backend using a streaming API - effectively,
 stdin, stdout and stderr.
 
 ```mermaid
 graph TB
-    IMAGE["Docker Image"] --> SERVER["potato-server"]
+    IMAGE["Docker Image"] --> SERVER["spudkit-server"]
     SERVER -- "index.html" --> BROWSER["Browser Engine\n(system webview)"]
     SERVER -- "script.sh" --> DOCKER["Container Engine\n(Docker)"]
     BROWSER <-- "input/output streams" --> DOCKER
@@ -48,7 +48,7 @@ graph TB
 | `/calls` | POST | Create a call and stream output. Body: `{"cmd": ["/script.sh"]}`. Returns SSE stream. |
 | `/calls/{id}/stdin` | POST | Send input to a running process. Body: `{"data": {...}}`. |
 
-The server also exposes a management API on `/tmp/potato.sock`:
+The server also exposes a management API on `/tmp/spudkit.sock`:
 
 | Endpoint | Method | Description |
 |---|---|---|
@@ -71,7 +71,7 @@ Stderr output is automatically tagged as `{"event": "error", ...}`. When the pro
 
 ## Frontend Options
 
-Potato app frontends are just static web files. You can use any frontend technology:
+SpudKit app frontends are just static web files. You can use any frontend technology:
 
 - **HTMX + shell scripts** — no JavaScript, no build step. Great for simple tools.
 - **React / Vue / Svelte** — use Vite or any bundler. The build output goes in `/app/gui/`.
@@ -83,7 +83,7 @@ which collects all output and returns rendered HTML — simpler, but not streami
 
 ## HTMX Support
 
-Potato has built-in support for [HTMX](https://htmx.org/), making it possible to write web apps without having to write JavaScript.
+SpudKit has built-in support for [HTMX](https://htmx.org/), making it possible to write web apps without having to write JavaScript.
 
 > **Note:** The `/render` endpoint waits for the script to finish before returning HTML.
 > For real-time streaming (e.g., chat, progress updates), use the `/calls` API with
@@ -159,7 +159,7 @@ grep -i -n "$query" /book.txt
 **`Dockerfile`**:
 
 ```dockerfile
-FROM potato-base
+FROM spudkit-base
 RUN apt-get update && apt-get install -y curl jq && rm -rf /var/lib/apt/lists/*
 
 # Download the book
@@ -173,22 +173,22 @@ Build and run:
 
 ```sh
 docker build -t book-search .
-potato-app book-search
+spud-app book-search
 ```
 
 You can still use the app from the CLI:
 
 ```sh
-echo '{"query": "rabbit"}' | potato book-search search.sh
+echo '{"query": "rabbit"}' | spud book-search search.sh
 ```
 
 ## CLI Composability
 
-Potato apps work like Unix tools:
+SpudKit apps work like Unix tools:
 
 ```sh
 # Pipe between apps
-potato data-loader /export.sh | potato visualizer /plot.sh
+spud data-loader /export.sh | spud visualizer /plot.sh
 ```
 
 ## License

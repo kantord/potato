@@ -5,7 +5,7 @@ import * as path from "path";
 const rootDir = path.resolve(__dirname, "..");
 
 let tauriDriver: ChildProcess;
-let potatoServer: ChildProcess;
+let spudkitServer: ChildProcess;
 
 export const config: Options.Testrunner = {
   autoCompileOpts: {
@@ -21,8 +21,8 @@ export const config: Options.Testrunner = {
     {
       "alwaysMatch": {
         "tauri:options": {
-          application: path.join(rootDir, "target/debug/potato-app"),
-          args: ["potato-hello-world"],
+          application: path.join(rootDir, "target/debug/spud-app"),
+          args: ["spudkit-hello-world"],
         },
       },
       "firstMatch": [{}],
@@ -36,8 +36,8 @@ export const config: Options.Testrunner = {
   },
 
   onPrepare() {
-    potatoServer = spawn(
-      path.join(rootDir, "target/debug/potato-server"),
+    spudkitServer = spawn(
+      path.join(rootDir, "target/debug/spudkit-server"),
       [],
       {
         stdio: "pipe",
@@ -54,6 +54,6 @@ export const config: Options.Testrunner = {
 
   onComplete() {
     tauriDriver?.kill();
-    potatoServer?.kill();
+    spudkitServer?.kill();
   },
 };

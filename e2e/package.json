@@ -1,5 +1,5 @@
 {
-  "name": "potato-e2e",
+  "name": "spudkit-e2e",
   "private": true,
   "scripts": {
     "test": "wdio run wdio.conf.ts",

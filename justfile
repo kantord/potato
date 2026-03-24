@@ -1,6 +1,6 @@
 # Build the GUI polyfill (TypeScript → IIFE)
 polyfill:
-    cd crates/potato-gui && pnpm install && pnpm build
+    cd crates/spudkit-gui && pnpm install && pnpm build
 
 # Build all Rust crates (builds polyfill first)
 build: polyfill
@@ -12,9 +12,9 @@ test:
 
 # Build all Docker images
 images:
-    docker build -t potato-hello-world images/hello-world
-    docker build -t potato-hello-simple images/hello-simple
-    docker build -t potato-book-search images/book-search
+    docker build -t spudkit-hello-world images/hello-world
+    docker build -t spudkit-hello-simple images/hello-simple
+    docker build -t spudkit-book-search images/book-search
 
 # Build the hello-world frontend (requires pnpm)
 frontend:
@@ -22,9 +22,9 @@ frontend:
 
 # Install all binaries locally
 install:
-    cargo install --path crates/potato-server
-    cargo install --path crates/potato-cli
-    cargo install --path crates/potato-gui
+    cargo install --path crates/spudkit-server
+    cargo install --path crates/spudkit-cli
+    cargo install --path crates/spudkit-gui
 
 # Run clippy
 lint:
@@ -32,7 +32,7 @@ lint:
 
 # Type-check the GUI TypeScript
 typecheck:
-    cd crates/potato-gui && pnpm typecheck
+    cd crates/spudkit-gui && pnpm typecheck
 
 # Run all pre-commit checks
 check:
@@ -56,12 +56,12 @@ all: build images test e2e-all
 
 # Start the server
 server:
-    cargo run -p potato-server
+    cargo run -p spudkit-server
 
-# Open an app in the GUI (usage: just app potato-hello-world)
+# Open an app in the GUI (usage: just app spudkit-hello-world)
 app name:
-    WEBKIT_DISABLE_DMABUF_RENDERER=1 cargo run -p potato-gui -- {{name}}
+    WEBKIT_DISABLE_DMABUF_RENDERER=1 cargo run -p spudkit-gui -- {{name}}
 
-# Run a CLI command (usage: just cli potato-hello-simple echo.sh)
+# Run a CLI command (usage: just cli spudkit-hello-simple echo.sh)
 cli name cmd:
-    cargo run -p potato-cli -- {{name}} {{cmd}}
+    cargo run -p spudkit-cli -- {{name}} {{cmd}}
