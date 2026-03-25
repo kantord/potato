@@ -1,6 +1,6 @@
 [package]
 name = "spudkit"
-version = "0.1.0"
+version.workspace = true
 edition = "2024"
 description = "Server for managing spuds"
 license.workspace = true
@@ -25,7 +25,7 @@ uuid = { version = "=1.22.0", features = ["v4"] }
 os_pipe = "=1.2.3"
 anyhow = "=1.0.102"
 clap = { version = "=4.6.0", features = ["derive"] }
-spudkit-transport = { path = "../spudkit-transport" }
+spudkit-transport.workspace = true
 minijinja = "=2.18.0"
 form_urlencoded = "=1.2.2"
 

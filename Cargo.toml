@@ -3,8 +3,13 @@ members = ["crates/*"]
 resolver = "3"
 
 [workspace.package]
+version = "0.1.0"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/kantord/spudkit"
+
+[workspace.dependencies]
+spudkit-transport = { version = "=0.1.0", path = "crates/spudkit-transport" }
+spudkit-client = { version = "=0.1.0", path = "crates/spudkit-client" }
 
 [workspace.lints.rust]
 dead_code = "deny"

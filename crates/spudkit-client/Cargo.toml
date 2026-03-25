@@ -1,6 +1,6 @@
 [package]
 name = "spudkit-client"
-version = "0.1.0"
+version.workspace = true
 edition = "2024"
 description = "Client library for communicating with the spudkit server"
 license.workspace = true
@@ -10,6 +10,6 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
-spudkit-transport = { path = "../spudkit-transport" }
+spudkit-transport.workspace = true
 anyhow = "=1.0.102"
 serde_json = "=1.0.149"
