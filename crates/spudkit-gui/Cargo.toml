@@ -2,6 +2,9 @@
 name = "spudkit-gui"
 version = "0.1.0"
 edition = "2024"
+description = "Run GUI spuds"
+license.workspace = true
+repository.workspace = true
 
 [[bin]]
 name = "spud-app"

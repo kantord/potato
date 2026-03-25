@@ -2,6 +2,9 @@
 name = "spudkit-cli"
 version = "0.1.0"
 edition = "2024"
+description = "Run spuds in the CLI"
+license.workspace = true
+repository.workspace = true
 
 [[bin]]
 name = "spud"

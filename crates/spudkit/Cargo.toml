@@ -2,6 +2,9 @@
 name = "spudkit"
 version = "0.1.0"
 edition = "2024"
+description = "Server for managing spuds"
+license.workspace = true
+repository.workspace = true
 
 [lints]
 workspace = true
