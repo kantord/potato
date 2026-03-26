@@ -1,7 +1,7 @@
 #[allow(dead_code)]
 mod helpers;
 
-use helpers::{call_and_get_events, install_file, non_started_events};
+use helpers::{call_and_get_events, non_started_events};
 use rstest::*;
 
 #[fixture]
@@ -10,9 +10,7 @@ async fn app() -> axum::Router {
         .await
         .expect("failed to start container");
 
-    install_file(&container, "/app/gui/index.html", b"<h1>test</h1>\n").await;
-
-    spudkit::app_router(container.id)
+    spudkit::app_router(container)
 }
 
 #[rstest]

@@ -53,7 +53,7 @@ pub async fn app_with_script(script_name: &str, script_content: &str) -> axum::R
     use futures_util::StreamExt;
     while output.next().await.is_some() {}
 
-    spudkit::app_router(container.id)
+    spudkit::app_router(container)
 }
 
 pub async fn app_with_script_and_template(
@@ -90,7 +90,7 @@ pub async fn app_with_script_and_template(
     )
     .await;
 
-    spudkit::app_router(container.id)
+    spudkit::app_router(container)
 }
 
 pub fn parse_sse_events(body: &str) -> Vec<serde_json::Value> {

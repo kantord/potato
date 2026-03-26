@@ -100,7 +100,7 @@ async fn render_nonexistent_script_returns_error() {
     let container = spudkit::container::AppContainer::start_unchecked("debian:bookworm-slim")
         .await
         .expect("failed to start container");
-    let app = spudkit::app_router(container.id);
+    let app = spudkit::app_router(container);
 
     let response = app
         .oneshot(
@@ -133,7 +133,7 @@ async fn render_traversal_cannot_execute_arbitrary_binaries() {
     // Create /app/bin/ so the traversal path resolves
     helpers::install_file(&container, "/app/bin/.keep", b"").await;
 
-    let app = spudkit::app_router(container.id);
+    let app = spudkit::app_router(container);
 
     // ..%2f..%2f decodes to ../../ — so the script path becomes
     // /app/bin/../../bin/date → /bin/date

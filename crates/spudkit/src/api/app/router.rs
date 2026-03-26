@@ -10,9 +10,9 @@ use super::endpoints;
 use super::state::AppState;
 use crate::container::AppContainer;
 
-pub fn app_router(container_id: String) -> Router {
+pub fn app_router(container: AppContainer) -> Router {
     let state = AppState {
-        container: AppContainer { id: container_id },
+        container,
         stdin_writers: Arc::new(Mutex::new(HashMap::new())),
     };
     Router::new()

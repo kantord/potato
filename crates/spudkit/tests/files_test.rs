@@ -16,7 +16,7 @@ async fn app() -> axum::Router {
 
     install_file(&container, "/app/gui/index.html", b"<h1>test</h1>\n").await;
 
-    spudkit::app_router(container.id)
+    spudkit::app_router(container)
 }
 
 #[rstest]
@@ -83,7 +83,7 @@ async fn files_serves_binary_content() {
 
     install_file(&container, "/app/gui/image.png", &png_bytes).await;
 
-    let app = spudkit::app_router(container.id);
+    let app = spudkit::app_router(container);
 
     let response = app
         .oneshot(
@@ -119,7 +119,7 @@ async fn files_traversal_cannot_read_etc_passwd() {
 
     install_file(&container, "/app/gui/index.html", b"hello").await;
 
-    let app = spudkit::app_router(container.id);
+    let app = spudkit::app_router(container);
 
     let paths = [
         "/files/..%2f..%2fetc%2fpasswd",
