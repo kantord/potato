@@ -65,6 +65,7 @@ impl SpudkitImage {
 }
 
 /// A running app container.
+#[derive(Clone)]
 pub struct AppContainer {
     pub id: String,
 }

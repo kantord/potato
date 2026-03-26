@@ -8,10 +8,11 @@ use tokio::sync::Mutex;
 
 use super::endpoints;
 use super::state::AppState;
+use crate::container::AppContainer;
 
 pub fn app_router(container_id: String) -> Router {
     let state = AppState {
-        container_id,
+        container: AppContainer { id: container_id },
         stdin_writers: Arc::new(Mutex::new(HashMap::new())),
     };
     Router::new()

@@ -3,11 +3,13 @@ use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 
+use crate::container::AppContainer;
+
 pub(crate) type StdinWriter = Arc<Mutex<Option<Box<dyn tokio::io::AsyncWrite + Send + Unpin>>>>;
 
 #[derive(Clone)]
 pub(crate) struct AppState {
-    pub container_id: String,
+    pub container: AppContainer,
     pub stdin_writers: Arc<Mutex<HashMap<String, StdinWriter>>>,
 }
 

@@ -8,7 +8,6 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use super::super::state::{AppState, StdinWriter};
-use crate::container::AppContainer;
 use crate::sse_stream::SseStream;
 
 #[derive(serde::Deserialize)]
@@ -23,12 +22,11 @@ pub(crate) async fn handler(
     let (stream, sse) = SseStream::create();
 
     let call_id = crate::utils::generate_id();
-    let container_id = state.container_id.clone();
+    let container = state.container.clone();
     let stdin_writers = state.stdin_writers.clone();
     let cid = call_id.clone();
 
     tokio::spawn(async move {
-        let container = AppContainer { id: container_id };
         let resolved_cmd = crate::utils::resolve_cmd(&body.cmd);
         let attached = match container.exec(resolved_cmd).await {
             Ok(a) => a,

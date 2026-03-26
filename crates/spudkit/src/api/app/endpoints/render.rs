@@ -6,7 +6,6 @@ use axum::response::{Html, IntoResponse, Response};
 use std::sync::LazyLock;
 
 use super::super::state::AppState;
-use crate::container::AppContainer;
 
 static TEMPLATE_ENGINE: LazyLock<minijinja::Environment<'static>> =
     LazyLock::new(minijinja::Environment::new);
@@ -47,9 +46,7 @@ pub(crate) async fn handler(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    let container = AppContainer {
-        id: state.container_id.clone(),
-    };
+    let container = state.container.clone();
     let resolved_cmd = crate::utils::resolve_cmd(std::slice::from_ref(&script));
     let stdin_data = parse_stdin_data(&headers, &body);
 

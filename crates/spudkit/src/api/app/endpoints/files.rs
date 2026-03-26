@@ -3,12 +3,9 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 
 use super::super::state::AppState;
-use crate::container::AppContainer;
 
 pub(crate) async fn handler(State(state): State<AppState>, Path(path): Path<String>) -> Response {
-    let container = AppContainer {
-        id: state.container_id.clone(),
-    };
+    let container = state.container.clone();
     let container_path = match crate::utils::resolve_container_path("/app/gui", &path) {
         Some(p) => p,
         None => return StatusCode::NOT_FOUND.into_response(),
