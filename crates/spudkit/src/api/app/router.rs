@@ -8,7 +8,7 @@ use tower_http::services::ServeDir;
 use super::endpoints;
 use super::state::AppState;
 
-pub fn app_router(static_dir: PathBuf, container_id: Option<String>) -> Router {
+pub fn app_router(static_dir: PathBuf, container_id: String) -> Router {
     let gui_dir = static_dir.join("app/gui");
     let state = AppState {
         container_id,

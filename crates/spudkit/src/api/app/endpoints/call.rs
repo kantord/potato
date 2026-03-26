@@ -28,11 +28,6 @@ pub(crate) async fn handler(
     let cid = call_id.clone();
 
     tokio::spawn(async move {
-        let container_id = match container_id {
-            Some(id) => id,
-            None => return stream.error("no container available for this app").await,
-        };
-
         let container = AppContainer { id: container_id };
         let resolved_cmd = crate::utils::resolve_cmd(&body.cmd);
         let attached = match container.exec(resolved_cmd).await {

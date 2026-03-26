@@ -5,7 +5,7 @@ use tokio::sync::Mutex;
 use crate::container::{AppContainer, SpudkitImage};
 
 pub struct RunningApp {
-    pub container: Option<AppContainer>,
+    pub container: AppContainer,
 }
 
 /// Manages the set of active apps and their containers.
@@ -32,8 +32,8 @@ impl AppManager {
 
         let static_dir = spudkit_image.extract().await?;
 
-        let container = spudkit_image.start().await.ok();
-        let container_id = container.as_ref().map(|c| c.id.clone());
+        let container = spudkit_image.start().await?;
+        let container_id = container.id.clone();
 
         let path = format!("/tmp/spudkit-{image}.sock");
         let _ = std::fs::remove_file(&path);
@@ -61,10 +61,8 @@ impl AppManager {
     pub async fn shutdown(&self) {
         let apps = self.apps.lock().await;
         for (name, app) in apps.iter() {
-            if let Some(container) = &app.container {
-                println!("[{name}] Stopping container...");
-                container.stop().await;
-            }
+            println!("[{name}] Stopping container...");
+            app.container.stop().await;
             let path = format!("/tmp/spudkit-{name}.sock");
             let _ = std::fs::remove_file(&path);
         }
