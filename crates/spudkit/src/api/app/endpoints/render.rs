@@ -47,18 +47,9 @@ pub(crate) async fn handler(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    let container_id = match &state.container_id {
-        Some(id) => id.clone(),
-        None => {
-            return (
-                axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                "no container available",
-            )
-                .into_response();
-        }
+    let container = AppContainer {
+        id: state.container_id.clone(),
     };
-
-    let container = AppContainer { id: container_id };
     let resolved_cmd = crate::utils::resolve_cmd(std::slice::from_ref(&script));
     let stdin_data = parse_stdin_data(&headers, &body);
 

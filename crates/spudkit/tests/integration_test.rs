@@ -11,7 +11,7 @@ async fn app() -> axum::Router {
     let container = spudkit::container::AppContainer::start_unchecked("debian:bookworm-slim")
         .await
         .expect("failed to start container");
-    spudkit::app_router(dir, Some(container.id))
+    spudkit::app_router(dir, container.id)
 }
 
 fn parse_sse_events(body: &str) -> Vec<serde_json::Value> {
@@ -131,7 +131,7 @@ async fn app_with_script(script_name: &str, script_content: &str) -> axum::Route
     use futures_util::StreamExt;
     while output.next().await.is_some() {}
 
-    spudkit::app_router(dir, Some(container.id))
+    spudkit::app_router(dir, container.id)
 }
 
 #[tokio::test]
@@ -225,7 +225,7 @@ async fn render_nonexistent_script_returns_error() {
     let container = spudkit::container::AppContainer::start_unchecked("debian:bookworm-slim")
         .await
         .expect("failed to start container");
-    let app = spudkit::app_router(dir, Some(container.id));
+    let app = spudkit::app_router(dir, container.id);
 
     let response = app
         .oneshot(
