@@ -22,7 +22,7 @@ export const config: Options.Testrunner = {
       "alwaysMatch": {
         "tauri:options": {
           application: path.join(rootDir, "target/debug/spud-app"),
-          args: ["spudkit-book-search"],
+          args: ["book-search"],
         },
       },
       "firstMatch": [{}],

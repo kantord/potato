@@ -10,6 +10,9 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
-spudkit-transport.workspace = true
+spudkit-core.workspace = true
 anyhow = "=1.0.102"
 serde_json = "=1.0.149"
+
+[dev-dependencies]
+rstest.workspace = true

@@ -1,3 +1,6 @@
+mod spud;
+pub use spud::Spud;
+
 use anyhow::Context;
 use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;

@@ -8,8 +8,9 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/kantord/spudkit"
 
 [workspace.dependencies]
-spudkit-transport = { version = "=0.1.0", path = "crates/spudkit-transport" }
+spudkit-core = { version = "=0.1.0", path = "crates/spudkit-core" }
 spudkit-client = { version = "=0.1.0", path = "crates/spudkit-client" }
+rstest = "=0.26.1"
 
 [workspace.lints.rust]
 dead_code = "deny"

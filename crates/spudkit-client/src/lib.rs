@@ -1,7 +1,8 @@
 use anyhow::{Context, bail};
 
-use spudkit_transport::SpudkitConnection;
-pub use spudkit_transport::SseEvent;
+pub use spudkit_core::Spud;
+use spudkit_core::SpudkitConnection;
+pub use spudkit_core::SseEvent;
 
 const MANAGEMENT_SOCKET: &str = "/tmp/spudkit.sock";
 
@@ -25,8 +26,8 @@ impl SpudkitClient {
         }
     }
 
-    async fn activate(&self, app_name: &str) -> anyhow::Result<()> {
-        let body = serde_json::json!({ "image": app_name });
+    async fn activate(&self, spud: &Spud) -> anyhow::Result<()> {
+        let body = serde_json::json!({ "name": spud.name() });
         let response = self
             .server
             .fetch("POST", "/activate", Some(body.to_string().as_bytes()))
@@ -43,9 +44,10 @@ impl SpudkitClient {
     /// Activate an app and return a connection to it.
     /// Idempotent — safe to call multiple times.
     pub async fn app(&self, app_name: &str) -> anyhow::Result<SpudkitApp> {
-        self.activate(app_name).await?;
+        let spud = Spud::new(app_name)?;
+        self.activate(&spud).await?;
         Ok(SpudkitApp {
-            conn: SpudkitConnection::new(format!("/tmp/spudkit-{app_name}.sock")),
+            conn: SpudkitConnection::new(spud.socket_path()),
         })
     }
 }

@@ -12,9 +12,9 @@ test:
 
 # Build all Docker images
 images:
-    docker build -t spudkit-hello-world images/hello-world
-    docker build -t spudkit-hello-simple images/hello-simple
-    docker build -t spudkit-book-search images/book-search
+    docker build -t spud-hello-world images/hello-world
+    docker build -t spud-hello-simple images/hello-simple
+    docker build -t spud-book-search images/book-search
 
 # Build the hello-world frontend (requires pnpm)
 frontend:
@@ -58,10 +58,10 @@ all: build images test e2e-all
 server:
     cargo run -p spudkit
 
-# Open an app in the GUI (usage: just app spudkit-hello-world)
+# Open an app in the GUI (usage: just app spud-hello-world)
 app name:
     WEBKIT_DISABLE_DMABUF_RENDERER=1 cargo run -p spudkit-gui -- {{name}}
 
-# Run a CLI command (usage: just cli spudkit-hello-simple echo.sh)
+# Run a CLI command (usage: just cli spud-hello-simple echo.sh)
 cli name cmd:
     cargo run -p spudkit-cli -- {{name}} {{cmd}}
