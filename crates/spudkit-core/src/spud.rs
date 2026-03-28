@@ -5,8 +5,6 @@ pub struct Spud {
 }
 
 impl Spud {
-    /// Create a spud from a short name (e.g., "hello-world").
-    /// Returns an error if the name is empty or contains invalid characters.
     pub fn new(name: &str) -> anyhow::Result<Self> {
         if name.is_empty() || name.contains('/') || name.contains("..") {
             anyhow::bail!("invalid spud name: {name:?}");
