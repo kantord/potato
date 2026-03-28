@@ -1,16 +1,15 @@
+#[allow(dead_code)]
+mod helpers;
+
 use axum::body::Body;
+use helpers::build_labeled_image;
 use http_body_util::BodyExt;
 use hyper::Request;
 use tower::ServiceExt;
 
-/// The management router should have a GET /spuds endpoint
-/// that returns available spud images.
 #[tokio::test]
 async fn list_spuds_endpoint_returns_available_spuds() {
-    // Ensure a spud- prefixed labeled image exists
-    let _ = std::process::Command::new("docker")
-        .args(["tag", "spudkit-base:latest", "spud-endpoint-test:latest"])
-        .output();
+    build_labeled_image("spud-endpoint-test");
 
     let manager = spudkit::app_manager::AppManager::new();
     let app = spudkit::api::spudkit_router(manager);

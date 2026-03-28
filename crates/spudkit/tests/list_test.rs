@@ -1,19 +1,17 @@
+#[allow(dead_code)]
+mod helpers;
+
+use helpers::build_labeled_image;
+
 #[tokio::test]
 async fn list_available_spuds_returns_labeled_images() {
-    // Ensure at least one spud- prefixed labeled image exists
-    let _ = std::process::Command::new("docker")
-        .args(["tag", "spudkit-base:latest", "spud-test-list:latest"])
-        .output();
-    // Also tag a second one
-    let _ = std::process::Command::new("docker")
-        .args(["tag", "spudkit-base:latest", "spud-test-list2:latest"])
-        .output();
+    build_labeled_image("spud-test-list");
+    build_labeled_image("spud-test-list2");
 
     let spuds = spudkit::container::SpudkitImage::list_available()
         .await
         .unwrap();
 
-    // Should return Spud instances with stripped names
     let names: Vec<&str> = spuds.iter().map(|s| s.name()).collect();
     assert!(
         names.contains(&"test-list"),
@@ -27,7 +25,6 @@ async fn list_available_spuds_returns_labeled_images() {
 
 #[tokio::test]
 async fn list_available_spuds_excludes_non_spud_prefixed() {
-    // spudkit-base has the label but not the spud- prefix — should be excluded
     let spuds = spudkit::container::SpudkitImage::list_available()
         .await
         .unwrap();
@@ -40,7 +37,6 @@ async fn list_available_spuds_excludes_non_spud_prefixed() {
 
 #[tokio::test]
 async fn list_available_spuds_excludes_unlabeled() {
-    // debian:bookworm-slim has spud- tag but no label
     let _ = std::process::Command::new("docker")
         .args(["tag", "debian:bookworm-slim", "spud-no-label:latest"])
         .output();

@@ -135,3 +135,24 @@ pub fn non_started_events(events: Vec<serde_json::Value>) -> Vec<serde_json::Val
         .filter(|e| e.get("event").and_then(|v| v.as_str()) != Some("started"))
         .collect()
 }
+
+pub fn build_labeled_image(name: &str) {
+    let dockerfile =
+        "FROM debian:bookworm-slim\nLABEL io.github.kantord.spudkit.version=\"1\"".to_string();
+    let output = std::process::Command::new("docker")
+        .args(["build", "-t", name, "-"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .and_then(|mut child| {
+            use std::io::Write;
+            child
+                .stdin
+                .take()
+                .unwrap()
+                .write_all(dockerfile.as_bytes())?;
+            child.wait()
+        });
+    assert!(output.is_ok(), "failed to build test image {name}");
+}
