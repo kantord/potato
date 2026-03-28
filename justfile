@@ -62,6 +62,10 @@ server:
 app name:
     WEBKIT_DISABLE_DMABUF_RENDERER=1 cargo run -p spudkit-gui -- {{name}}
 
-# Run a CLI command (usage: just cli spud-hello-simple echo.sh)
+# Run a CLI command (usage: just cli hello-simple echo.sh)
 cli name cmd:
-    cargo run -p spudkit-cli -- {{name}} {{cmd}}
+    cargo run -p spudkit-cli -- run {{name}} {{cmd}}
+
+# List available spuds
+ls:
+    cargo run -p spudkit-cli -- ls

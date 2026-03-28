@@ -3499,6 +3499,7 @@ dependencies = [
  "rstest",
  "serde_json",
  "spudkit-core",
+ "tokio",
 ]
 
 [[package]]

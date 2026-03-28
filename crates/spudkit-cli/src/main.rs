@@ -1,29 +1,53 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use spudkit_client::{SpudkitClient, SseEvent};
 use std::io::BufRead;
 
-/// Run containerized apps from the command line
 #[derive(Parser)]
 #[command(name = "spud", version, about)]
 struct Args {
-    /// Docker image name of the app
-    app: String,
+    #[command(subcommand)]
+    command: Command,
+}
 
-    /// Command to run inside the container
-    command: Vec<String>,
+#[derive(Subcommand)]
+enum Command {
+    /// Run a command inside a spud
+    Run {
+        /// Name of the spud
+        app: String,
+        /// Command to run inside the container
+        command: Vec<String>,
+    },
+    /// List available spuds
+    Ls,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
+    match args.command {
+        Command::Run { app, command } => run(&app, command).await,
+        Command::Ls => ls().await,
+    }
+}
+
+async fn ls() -> anyhow::Result<()> {
     let client = SpudkitClient::new();
-    let app = client.app(&args.app).await?;
+    let spuds = client.list_spuds().await?;
+    for spud in spuds {
+        println!("{}", spud.name());
+    }
+    Ok(())
+}
+
+async fn run(app: &str, cmd: Vec<String>) -> anyhow::Result<()> {
+    let client = SpudkitClient::new();
+    let app = client.app(app).await?;
     let app_for_stdin = app.clone();
 
     let (call_id_tx, call_id_rx) = tokio::sync::oneshot::channel::<String>();
 
-    let cmd = args.command;
     let output_handle = tokio::spawn(async move {
         let mut call_id_tx = Some(call_id_tx);
         app.call(&cmd, |event| match &event {
@@ -59,11 +83,9 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    // Forward stdin line by line concurrently with output
     let stdin_handle = tokio::spawn(async move {
         let (line_tx, mut line_rx) = tokio::sync::mpsc::channel::<String>(32);
 
-        // Read stdin in a blocking thread
         std::thread::spawn(move || {
             let stdin = std::io::stdin();
             for line in stdin.lock().lines() {
@@ -78,14 +100,12 @@ async fn main() -> anyhow::Result<()> {
             }
         });
 
-        // Send each line as it arrives
         while let Some(line) = line_rx.recv().await {
             let data = serde_json::json!({ "text": line });
             let _ = app_for_stdin.send_stdin(&call_id, &data).await;
         }
     });
 
-    // Wait for output to finish (process exit closes the stream)
     let _ = output_handle.await;
     stdin_handle.abort();
     Ok(())

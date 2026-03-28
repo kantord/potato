@@ -50,6 +50,28 @@ impl SpudkitClient {
             conn: SpudkitConnection::new(spud.socket_path()),
         })
     }
+
+    /// List all locally available spuds.
+    pub async fn list_spuds(&self) -> anyhow::Result<Vec<Spud>> {
+        let response = self
+            .server
+            .fetch("GET", "/spuds", None)
+            .await
+            .context("is spudkit running?")?;
+
+        let result: serde_json::Value = serde_json::from_slice(&response)?;
+        let names = result["spuds"].as_array().context("expected spuds array")?;
+
+        let mut spuds = Vec::new();
+        for name in names {
+            if let Some(s) = name.as_str()
+                && let Ok(spud) = Spud::new(s)
+            {
+                spuds.push(spud);
+            }
+        }
+        Ok(spuds)
+    }
 }
 
 /// A connection to a specific spudkit app.

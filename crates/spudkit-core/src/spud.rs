@@ -14,17 +14,10 @@ impl Spud {
         })
     }
 
-    /// The short display name (e.g., "hello-world").
     pub fn name(&self) -> &str {
         &self.name
     }
 
-    /// The Docker image name (e.g., "spud-hello-world").
-    pub fn image_name(&self) -> String {
-        format!("spud-{}", self.name)
-    }
-
-    /// The Unix socket path for this app.
     pub fn socket_path(&self) -> String {
         format!("/tmp/spudkit-{}.sock", self.name)
     }
@@ -34,12 +27,6 @@ impl Spud {
 mod tests {
     use super::*;
     use rstest::rstest;
-
-    #[test]
-    fn image_name_has_prefix() {
-        let spud = Spud::new("hello-world").unwrap();
-        assert_eq!(spud.image_name(), "spud-hello-world");
-    }
 
     #[test]
     fn socket_path_uses_name() {

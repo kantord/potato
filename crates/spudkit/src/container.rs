@@ -4,20 +4,27 @@ use bollard::exec::{CreateExecOptions, StartExecResults};
 use bollard::models::ContainerCreateBody;
 use bollard::query_parameters::{CreateContainerOptions, RemoveContainerOptions};
 use futures_util::{Stream, StreamExt};
+use spudkit_core::Spud;
 use std::pin::Pin;
 
 const SPUDKIT_LABEL: &str = "io.github.kantord.spudkit.version";
 
 /// A validated spudkit container image.
 pub struct SpudkitImage {
-    name: String,
+    spud: Spud,
 }
 
 impl SpudkitImage {
-    /// Validate that an image carries the spudkit label.
-    pub async fn new(image: &str) -> anyhow::Result<Self> {
+    /// The Docker image name derived from the spud (e.g., "spud-hello-world").
+    pub fn image_name(&self) -> String {
+        format!("spud-{}", self.spud.name())
+    }
+
+    /// Validate that a spud's image carries the spudkit label.
+    pub async fn from_spud(spud: Spud) -> anyhow::Result<Self> {
+        let image_name = format!("spud-{}", spud.name());
         let docker = Docker::connect_with_local_defaults()?;
-        let info = docker.inspect_image(image).await?;
+        let info = docker.inspect_image(&image_name).await?;
 
         let has_label = info
             .config
@@ -28,13 +35,43 @@ impl SpudkitImage {
 
         if !has_label {
             anyhow::bail!(
-                "image {image} is not a spudkit container: missing label {SPUDKIT_LABEL}"
+                "image {image_name} is not a spudkit container: missing label {SPUDKIT_LABEL}"
             );
         }
 
-        Ok(Self {
-            name: image.to_string(),
-        })
+        Ok(Self { spud })
+    }
+
+    pub fn spud(&self) -> &Spud {
+        &self.spud
+    }
+
+    /// List all locally available spuds (images with the spudkit label and `spud-` prefix).
+    pub async fn list_available() -> anyhow::Result<Vec<Spud>> {
+        use std::collections::HashMap;
+
+        let docker = Docker::connect_with_local_defaults()?;
+        let mut filters = HashMap::new();
+        filters.insert("label", vec![SPUDKIT_LABEL]);
+        let options = bollard::query_parameters::ListImagesOptionsBuilder::default()
+            .filters(&filters)
+            .build();
+
+        let images = docker.list_images(Some(options)).await?;
+
+        let mut spuds = Vec::new();
+        for image in images {
+            for tag in &image.repo_tags {
+                let name = tag.split(':').next().unwrap_or(tag);
+                if let Some(short_name) = name.strip_prefix("spud-")
+                    && let Ok(spud) = Spud::new(short_name)
+                {
+                    spuds.push(spud);
+                }
+            }
+        }
+
+        Ok(spuds)
     }
 
     /// Start a persistent container for this image.
@@ -42,7 +79,7 @@ impl SpudkitImage {
         let docker = Docker::connect_with_local_defaults()?;
 
         let config = ContainerCreateBody {
-            image: Some(self.name.clone()),
+            image: Some(self.image_name()),
             cmd: Some(vec!["sleep".to_string(), "infinity".to_string()]),
             ..Default::default()
         };

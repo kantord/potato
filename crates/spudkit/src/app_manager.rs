@@ -30,7 +30,7 @@ impl AppManager {
             return Ok("already_active");
         }
 
-        let spudkit_image = SpudkitImage::new(&spud.image_name()).await?;
+        let spudkit_image = SpudkitImage::from_spud(spud.clone()).await?;
 
         let container = spudkit_image.start().await?;
 
