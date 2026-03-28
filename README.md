@@ -138,8 +138,8 @@ grep -i -n "$query" /book.txt
 <!DOCTYPE html>
 <html data-theme="dark">
 <head>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <link rel="stylesheet" href="/files/pico.min.css">
+    <script src="/files/htmx.min.js"></script>
 </head>
 <body>
     <main class="container">
@@ -161,6 +161,8 @@ grep -i -n "$query" /book.txt
 ```dockerfile
 FROM spudkit-base
 RUN apt-get update && apt-get install -y curl jq && rm -rf /var/lib/apt/lists/*
+RUN curl -sL "https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" -o /app/gui/pico.min.css
+RUN curl -sL "https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js" -o /app/gui/htmx.min.js
 
 # Download the book
 RUN curl -sL "https://www.gutenberg.org/cache/epub/11/pg11.txt" -o /book.txt
