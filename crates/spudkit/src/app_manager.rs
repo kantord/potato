@@ -3,6 +3,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::container::{AppContainer, SpudkitImage};
+use spudkit_core::Spud;
 
 pub struct RunningApp {
     pub container: AppContainer,
@@ -23,16 +24,17 @@ impl AppManager {
 
     /// Activate an app: extract its image, start a container, and serve it on a Unix socket.
     /// Returns "already_active" if the app is already running.
-    pub async fn activate(&self, image: &str) -> anyhow::Result<&'static str> {
-        if self.apps.lock().await.contains_key(image) {
+    pub async fn activate(&self, spud: &Spud) -> anyhow::Result<&'static str> {
+        let name = spud.name().to_string();
+        if self.apps.lock().await.contains_key(&name) {
             return Ok("already_active");
         }
 
-        let spudkit_image = SpudkitImage::new(image).await?;
+        let spudkit_image = SpudkitImage::new(&spud.image_name()).await?;
 
         let container = spudkit_image.start().await?;
 
-        let path = format!("/tmp/spudkit-{image}.sock");
+        let path = spud.socket_path();
         let _ = std::fs::remove_file(&path);
 
         let listener = tokio::net::UnixListener::bind(&path)?;
@@ -45,7 +47,7 @@ impl AppManager {
         self.apps
             .lock()
             .await
-            .insert(image.to_string(), RunningApp { container });
+            .insert(name, RunningApp { container });
 
         Ok("activated")
     }
@@ -60,8 +62,8 @@ impl AppManager {
         for (name, app) in apps.iter() {
             println!("[{name}] Stopping container...");
             app.container.stop().await;
-            let path = format!("/tmp/spudkit-{name}.sock");
-            let _ = std::fs::remove_file(&path);
+            let spud = Spud::new(name);
+            let _ = std::fs::remove_file(spud.socket_path());
         }
     }
 }

@@ -131,9 +131,9 @@ jobs:
         run: |
           docker pull debian:bookworm-slim
           docker build -t spudkit-base images/base
-          docker build -t spudkit-hello-world images/hello-world
-          docker build -t spudkit-hello-simple images/hello-simple
-          docker build -t spudkit-book-search images/book-search
+          docker build -t spud-hello-world images/hello-world
+          docker build -t spud-hello-simple images/hello-simple
+          docker build -t spud-book-search images/book-search
 
       - name: Build polyfill
         run: cd crates/spudkit-gui && pnpm install && pnpm build

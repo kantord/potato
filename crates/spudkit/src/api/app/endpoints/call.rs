@@ -2,7 +2,7 @@ use axum::response::sse::{Event, Sse};
 use axum::{Json, extract::State};
 use bollard::container::LogOutput;
 use futures_util::{Stream, StreamExt};
-use spudkit_transport::SseEvent;
+use spudkit_core::SseEvent;
 use std::convert::Infallible;
 use std::sync::Arc;
 use tokio::sync::Mutex;

@@ -1,6 +1,6 @@
 use axum::response::sse::{Event, Sse};
 use futures_util::Stream;
-use spudkit_transport::SseEvent;
+use spudkit_core::SseEvent;
 use std::convert::Infallible;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;

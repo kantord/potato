@@ -23,7 +23,7 @@ tokio-stream = "=0.1.18"
 uuid = { version = "=1.23.0", features = ["v4"] }
 anyhow = "=1.0.102"
 clap = { version = "=4.6.0", features = ["derive"] }
-spudkit-transport.workspace = true
+spudkit-core.workspace = true
 minijinja = "=2.18.0"
 form_urlencoded = "=1.2.2"
 

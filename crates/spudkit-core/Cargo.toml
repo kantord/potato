@@ -1,8 +1,8 @@
 [package]
-name = "spudkit-transport"
+name = "spudkit-core"
 version.workspace = true
 edition = "2024"
-description = "Transport layer for spudkit"
+description = "Core types and transport layer for spudkit"
 license.workspace = true
 repository.workspace = true
 

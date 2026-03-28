@@ -3471,7 +3471,7 @@ dependencies = [
  "rstest",
  "serde",
  "serde_json",
- "spudkit-transport",
+ "spudkit-core",
  "tokio",
  "tokio-stream",
  "tower",
@@ -3496,7 +3496,21 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "serde_json",
- "spudkit-transport",
+ "spudkit-core",
+]
+
+[[package]]
+name = "spudkit-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "hyperlocal",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -3508,20 +3522,6 @@ dependencies = [
  "spudkit-client",
  "tauri",
  "tauri-build",
- "tokio",
-]
-
-[[package]]
-name = "spudkit-transport"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bytes",
- "http-body-util",
- "hyper",
- "hyper-util",
- "hyperlocal",
- "serde_json",
  "tokio",
 ]
 
