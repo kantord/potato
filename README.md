@@ -138,8 +138,8 @@ grep -i -n "$query" /book.txt
 <!DOCTYPE html>
 <html data-theme="dark">
 <head>
-    <link rel="stylesheet" href="/files/pico.min.css">
-    <script src="/files/htmx.min.js"></script>
+    <link rel="stylesheet" href="/pico.min.css">
+    <script src="/htmx.min.js"></script>
 </head>
 <body>
     <main class="container">
