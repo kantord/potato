@@ -159,3 +159,36 @@ async fn render_traversal_cannot_execute_arbitrary_binaries() {
         "path traversal in /render executed /bin/date: status={status} body={text}"
     );
 }
+
+#[tokio::test]
+async fn render_auto_escapes_html_in_templates() {
+    let app = app_with_script_and_template(
+        "xss.sh",
+        "#!/bin/sh\necho '{\"title\": \"<script>alert(1)</script>\"}'",
+        b"<p>{{ title }}</p>",
+    )
+    .await;
+
+    let response = app
+        .oneshot(
+            Request::post("/render/xss.sh")
+                .header("Content-Type", "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let text = String::from_utf8(body.to_vec()).unwrap();
+
+    assert!(
+        !text.contains("<script>"),
+        "template should auto-escape HTML, but got raw script tag: {text}"
+    );
+    assert!(
+        text.contains("&lt;script&gt;"),
+        "expected escaped HTML entities, got: {text}"
+    );
+}
