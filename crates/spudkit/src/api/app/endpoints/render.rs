@@ -7,8 +7,11 @@ use std::sync::LazyLock;
 
 use super::super::state::AppState;
 
-static TEMPLATE_ENGINE: LazyLock<minijinja::Environment<'static>> =
-    LazyLock::new(minijinja::Environment::new);
+static TEMPLATE_ENGINE: LazyLock<minijinja::Environment<'static>> = LazyLock::new(|| {
+    let mut env = minijinja::Environment::new();
+    env.set_auto_escape_callback(|_| minijinja::AutoEscape::Html);
+    env
+});
 
 /// Parse stdin data from either JSON or form-encoded body.
 fn parse_stdin_data(headers: &HeaderMap, body: &[u8]) -> Option<serde_json::Value> {
