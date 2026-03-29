@@ -236,16 +236,23 @@ impl AppContainer {
 
         let mut lines = Vec::new();
         let mut output = attached.output;
+        let mut partial = String::new();
         while let Some(Ok(log)) = output.next().await {
             let text = match &log {
                 LogOutput::StdOut { message } => String::from_utf8_lossy(message).to_string(),
                 _ => continue,
             };
-            for line in text.lines() {
+            partial.push_str(&text);
+            while let Some(pos) = partial.find('\n') {
+                let line = &partial[..pos];
                 if !line.is_empty() {
                     lines.push(line.to_string());
                 }
+                partial = partial[pos + 1..].to_string();
             }
+        }
+        if !partial.is_empty() {
+            lines.push(partial);
         }
 
         Ok(lines)
