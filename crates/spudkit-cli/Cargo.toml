@@ -20,7 +20,7 @@ anyhow = "=1.0.102"
 clap = { version = "=4.6.0", features = ["derive"] }
 spudkit-client.workspace = true
 tokio = { version = "=1.50.0", features = ["rt-multi-thread", "macros", "io-std"] }
-which = "8"
+which = "=8.0.2"
 
 [dev-dependencies]
 rstest.workspace = true
