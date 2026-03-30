@@ -3,13 +3,13 @@ members = ["crates/*"]
 resolver = "3"
 
 [workspace.package]
-version = "0.1.1"
+version = "0.1.2"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/kantord/spudkit"
 
 [workspace.dependencies]
-spudkit-core = { version = "=0.1.1", path = "crates/spudkit-core" }
-spudkit-client = { version = "=0.1.1", path = "crates/spudkit-client" }
+spudkit-core = { version = "=0.1.2", path = "crates/spudkit-core" }
+spudkit-client = { version = "=0.1.2", path = "crates/spudkit-client" }
 rstest = "=0.26.1"
 
 [workspace.lints.rust]

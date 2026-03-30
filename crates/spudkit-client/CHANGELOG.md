@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/kantord/spudkit/compare/spudkit-client-v0.1.1...spudkit-client-v0.1.2) - 2026-03-30
+
+### Added
+
+- add chrome-based frontend
+
 ## [0.1.1](https://github.com/kantord/spudkit/compare/spudkit-client-v0.1.0...spudkit-client-v0.1.1) - 2026-03-29
 
 ### Added

@@ -3474,7 +3474,7 @@ dependencies = [
 
 [[package]]
 name = "spud-app-chromium"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "rstest",
@@ -3487,7 +3487,7 @@ dependencies = [
 
 [[package]]
 name = "spudkit"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -3513,7 +3513,7 @@ dependencies = [
 
 [[package]]
 name = "spudkit-cli"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -3527,7 +3527,7 @@ dependencies = [
 
 [[package]]
 name = "spudkit-client"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "rstest",
@@ -3538,7 +3538,7 @@ dependencies = [
 
 [[package]]
 name = "spudkit-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3553,7 +3553,7 @@ dependencies = [
 
 [[package]]
 name = "spudkit-gui"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "mime_guess",
  "rstest",
