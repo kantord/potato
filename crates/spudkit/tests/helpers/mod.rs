@@ -109,7 +109,7 @@ pub async fn call_and_get_events(app: axum::Router, cmd: Vec<&str>) -> Vec<serde
 
     let response = app
         .oneshot(
-            Request::post("/__calls")
+            Request::post("/_api/calls")
                 .header("Content-Type", "application/json")
                 .body(Body::from(body.to_string()))
                 .unwrap(),

@@ -13,7 +13,7 @@ async fn render_returns_plain_text_without_template() {
 
     let response = app
         .oneshot(
-            Request::post("/__render/date.sh")
+            Request::post("/_api/render/date.sh")
                 .header("Content-Type", "application/json")
                 .body(Body::from("{}"))
                 .unwrap(),
@@ -38,7 +38,7 @@ async fn render_with_template_returns_html() {
 
     let response = app
         .oneshot(
-            Request::post("/__render/echo.sh")
+            Request::post("/_api/render/echo.sh")
                 .header("Content-Type", "application/json")
                 .body(Body::from("{}"))
                 .unwrap(),
@@ -59,7 +59,7 @@ async fn render_accepts_form_encoded_data() {
 
     let response = app
         .oneshot(
-            Request::post("/__render/cat.sh")
+            Request::post("/_api/render/cat.sh")
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .body(Body::from("name=alice&color=blue"))
                 .unwrap(),
@@ -80,7 +80,7 @@ async fn render_accepts_json_with_data_field() {
 
     let response = app
         .oneshot(
-            Request::post("/__render/cat.sh")
+            Request::post("/_api/render/cat.sh")
                 .header("Content-Type", "application/json")
                 .body(Body::from(r#"{"data": {"greeting": "hi"}}"#))
                 .unwrap(),
@@ -104,7 +104,7 @@ async fn render_nonexistent_script_returns_error() {
 
     let response = app
         .oneshot(
-            Request::post("/__render/nonexistent.sh")
+            Request::post("/_api/render/nonexistent.sh")
                 .header("Content-Type", "application/json")
                 .body(Body::from("{}"))
                 .unwrap(),
@@ -141,7 +141,7 @@ async fn render_traversal_cannot_execute_arbitrary_binaries() {
     // and returns a date string instead of an error
     let response = app
         .oneshot(
-            Request::post("/__render/..%2f..%2fbin%2fdate")
+            Request::post("/_api/render/..%2f..%2fbin%2fdate")
                 .header("Content-Type", "application/json")
                 .body(Body::from("{}"))
                 .unwrap(),
@@ -171,7 +171,7 @@ async fn render_auto_escapes_html_in_templates() {
 
     let response = app
         .oneshot(
-            Request::post("/__render/xss.sh")
+            Request::post("/_api/render/xss.sh")
                 .header("Content-Type", "application/json")
                 .body(Body::from("{}"))
                 .unwrap(),

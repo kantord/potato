@@ -11,7 +11,7 @@
         <h1>Book Search</h1>
         <p><em>Search through Alice's Adventures in Wonderland by Lewis Carroll</em></p>
 
-        <form hx-post="/__render/search.sh" hx-target="#results" hx-indicator="#loading">
+        <form hx-post="/_api/render/search.sh" hx-target="#results" hx-indicator="#loading">
             <fieldset role="group">
                 <input type="text" name="query" placeholder="Search for a word or phrase..." autofocus />
                 <button type="submit">Search</button>

@@ -16,10 +16,10 @@ pub fn app_router(container: AppContainer) -> Router {
         stdin_writers: Arc::new(Mutex::new(HashMap::new())),
     };
     Router::new()
-        .route("/__calls", post(endpoints::call::handler))
-        .route("/__calls/{id}/stdin", post(endpoints::stdin::handler))
-        .route("/__render/{script}", post(endpoints::render::handler))
-        .route("/__files/{*path}", get(endpoints::files::handler))
+        .route("/_api/calls", post(endpoints::call::handler))
+        .route("/_api/calls/{id}/stdin", post(endpoints::stdin::handler))
+        .route("/_api/render/{script}", post(endpoints::render::handler))
+        .route("/_api/files/{*path}", get(endpoints::files::handler))
         .fallback(get(endpoints::files::fallback))
         .with_state(state)
 }
