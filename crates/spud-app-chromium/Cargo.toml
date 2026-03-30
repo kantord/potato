@@ -15,7 +15,7 @@ spudkit-core.workspace = true
 tokio = { version = "=1.50.0", features = ["rt-multi-thread", "macros", "net", "io-util", "process"] }
 anyhow = "=1.0.102"
 which = "=7.0.3"
-tempfile = "=3.20.0"
+tempfile = "=3.27.0"
 
 [dev-dependencies]
 rstest.workspace = true
