@@ -39,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 fn find_frontend() -> Option<&'static str> {
-    let candidates = ["spud-app-tauri"];
+    let candidates = ["spud-app-chromium", "spud-app-tauri"];
     candidates
         .into_iter()
         .find(|&candidate| which::which(candidate).is_ok())

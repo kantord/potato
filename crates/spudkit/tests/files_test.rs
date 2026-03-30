@@ -37,7 +37,7 @@ async fn files_serves_static_content(#[future] app: axum::Router) {
     let response = app
         .await
         .oneshot(
-            Request::get("/files/index.html")
+            Request::get("/__files/index.html")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -57,7 +57,7 @@ async fn files_returns_404_for_missing_file(#[future] app: axum::Router) {
     let response = app
         .await
         .oneshot(
-            Request::get("/files/nonexistent.txt")
+            Request::get("/__files/nonexistent.txt")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -87,7 +87,7 @@ async fn files_serves_binary_content() {
 
     let response = app
         .oneshot(
-            Request::get("/files/image.png")
+            Request::get("/__files/image.png")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -122,8 +122,8 @@ async fn files_traversal_cannot_read_etc_passwd() {
     let app = spudkit::app_router(container);
 
     let paths = [
-        "/files/..%2f..%2fetc%2fpasswd",
-        "/files/..%252f..%252fetc%252fpasswd",
+        "/__files/..%2f..%2fetc%2fpasswd",
+        "/__files/..%252f..%252fetc%252fpasswd",
     ];
 
     for path in paths {

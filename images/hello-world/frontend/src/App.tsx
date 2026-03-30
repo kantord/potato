@@ -8,7 +8,7 @@ async function runCommand(
   onEvent: (event: string, data: unknown) => void
 ): Promise<void> {
   // Single request: POST /calls returns SSE stream
-  const res = await fetch("/calls", {
+  const res = await fetch("/__calls", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cmd }),
@@ -39,7 +39,7 @@ async function runCommand(
           callId = msg.data.call_id;
           // Send stdin now that the process is running
           if (stdin !== undefined) {
-            fetch(`/calls/${callId}/stdin`, {
+            fetch(`/__calls/${callId}/stdin`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ data: stdin }),

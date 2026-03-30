@@ -127,7 +127,7 @@
         }
 
         async function streamCall(cmd, stdin, onEvent) {
-            const res = await fetch('/calls', {
+            const res = await fetch('/__calls', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ cmd: cmd })
@@ -151,7 +151,7 @@
                         if (msg.event === 'started' && msg.data && msg.data.call_id) {
                             callId = msg.data.call_id;
                             if (stdin !== undefined) {
-                                fetch('/calls/' + callId + '/stdin', {
+                                fetch('/__calls/' + callId + '/stdin', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ data: stdin })
@@ -225,7 +225,7 @@
         async function startEcho() {
             echoStatus.textContent = 'Starting...';
 
-            const res = await fetch('/calls', {
+            const res = await fetch('/__calls', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ cmd: ['echo.sh'] })
@@ -272,7 +272,7 @@
                 if (!echoCallId) return;
                 const text = echoInput.value;
                 if (!text) return;
-                fetch('/calls/' + echoCallId + '/stdin', {
+                fetch('/__calls/' + echoCallId + '/stdin', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ data: { text: text } })

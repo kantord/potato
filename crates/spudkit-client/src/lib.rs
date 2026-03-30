@@ -88,7 +88,7 @@ impl SpudkitApp {
         self.conn
             .stream(
                 "POST",
-                "/calls",
+                "/__calls",
                 Some(body.to_string().as_bytes()),
                 on_event,
             )
@@ -97,7 +97,7 @@ impl SpudkitApp {
 
     /// Send input to a running call.
     pub async fn send_stdin(&self, call_id: &str, data: &serde_json::Value) -> anyhow::Result<()> {
-        let path = format!("/calls/{call_id}/stdin");
+        let path = format!("/__calls/{call_id}/stdin");
         let body = serde_json::json!({ "data": data });
         self.conn
             .fetch("POST", &path, Some(body.to_string().as_bytes()))
@@ -131,7 +131,7 @@ impl SpudkitApp {
 
     /// Fetch a static file from the app.
     pub async fn fetch_file(&self, path: &str) -> anyhow::Result<Vec<u8>> {
-        let server_path = format!("/files{path}");
+        let server_path = format!("/__files{path}");
         self.conn.fetch("GET", &server_path, None).await
     }
 }

@@ -25,6 +25,7 @@ install:
     cargo install --path crates/spudkit
     cargo install --path crates/spudkit-cli
     cargo install --path crates/spudkit-gui
+    cargo install --path crates/spud-app-chromium
 
 # Run clippy
 lint:

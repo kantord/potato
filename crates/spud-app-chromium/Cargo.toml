@@ -1,0 +1,21 @@
+[package]
+name = "spud-app-chromium"
+version.workspace = true
+edition = "2024"
+description = "Run GUI spuds using Chromium/Chrome"
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+spudkit-client.workspace = true
+spudkit-core.workspace = true
+tokio = { version = "=1.50.0", features = ["rt-multi-thread", "macros", "net", "io-util"] }
+anyhow = "=1.0.102"
+which = "=7.0.3"
+tempfile = "=3.20.0"
+
+[dev-dependencies]
+rstest.workspace = true
