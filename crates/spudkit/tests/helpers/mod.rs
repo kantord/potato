@@ -93,6 +93,43 @@ pub async fn app_with_script_and_template(
     spudkit::app_router(container)
 }
 
+/// Build an app router that goes through the unix socket path (not docker exec).
+/// `image_name` must be unique per test to avoid conflicts.
+pub async fn app_via_socket_with_script(
+    image_name: &str,
+    script_name: &str,
+    script_content: &str,
+) -> axum::Router {
+    build_labeled_image(image_name);
+
+    let spud =
+        spudkit_core::Spud::new(image_name.strip_prefix("spud-").unwrap_or(image_name)).unwrap();
+    let image = spudkit::container::SpudkitImage::from_spud(spud)
+        .await
+        .expect("failed to validate image");
+    let container = image.start().await.expect("failed to start container");
+
+    // Install the script into the running container
+    let install_cmd = vec![
+        "/bin/sh".to_string(),
+        "-c".to_string(),
+        format!(
+            "mkdir -p /app/bin && cat > /app/bin/{script_name} && chmod +x /app/bin/{script_name}"
+        ),
+    ];
+    let attached = container.exec(install_cmd).await.unwrap();
+    use futures_util::StreamExt;
+    use tokio::io::AsyncWriteExt;
+    let mut input = attached.input;
+    input.write_all(script_content.as_bytes()).await.unwrap();
+    input.shutdown().await.unwrap();
+    drop(input);
+    let mut output = attached.output;
+    while output.next().await.is_some() {}
+
+    spudkit::app_router(container)
+}
+
 pub fn parse_sse_events(body: &str) -> Vec<serde_json::Value> {
     body.lines()
         .filter(|line| line.starts_with("data:"))
@@ -136,15 +173,114 @@ pub fn non_started_events(events: Vec<serde_json::Value>) -> Vec<serde_json::Val
         .collect()
 }
 
+pub async fn call_with_stdin_and_get_events(
+    app: axum::Router,
+    cmd: Vec<&str>,
+    stdin_data: serde_json::Value,
+) -> Vec<serde_json::Value> {
+    let app_for_stdin = app.clone();
+    let cmd_json: Vec<String> = cmd.into_iter().map(|s| s.to_string()).collect();
+
+    let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<serde_json::Value>(32);
+
+    tokio::spawn(async move {
+        let response = app
+            .oneshot(
+                Request::post("/_api/calls")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({ "cmd": cmd_json }).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let mut body = response.into_body();
+        let mut buffer = String::new();
+
+        loop {
+            match body.frame().await {
+                None => break,
+                Some(Err(_)) => break,
+                Some(Ok(frame)) => {
+                    if let Ok(data) = frame.into_data() {
+                        buffer.push_str(&String::from_utf8_lossy(&data));
+                    }
+                }
+            }
+
+            while let Some(pos) = buffer.find("\n\n") {
+                let chunk = buffer[..pos + 2].to_string();
+                buffer = buffer[pos + 2..].to_string();
+                for event in parse_sse_events(&chunk) {
+                    if event_tx.send(event).await.is_err() {
+                        return;
+                    }
+                }
+            }
+        }
+
+        for event in parse_sse_events(&buffer) {
+            let _ = event_tx.send(event).await;
+        }
+    });
+
+    let mut all_events = vec![];
+    let mut stdin_sent = false;
+
+    loop {
+        let event = tokio::time::timeout(std::time::Duration::from_secs(5), event_rx.recv())
+            .await
+            .expect("timeout waiting for SSE event");
+
+        let Some(event) = event else { break };
+
+        if !stdin_sent {
+            if let Some(call_id) = event
+                .get("data")
+                .and_then(|d| d.get("call_id"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+            {
+                app_for_stdin
+                    .clone()
+                    .oneshot(
+                        Request::post(format!("/_api/calls/{call_id}/stdin"))
+                            .header("Content-Type", "application/json")
+                            .body(Body::from(
+                                serde_json::json!({ "data": stdin_data }).to_string(),
+                            ))
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                stdin_sent = true;
+            }
+        }
+
+        let is_end = event.get("event").and_then(|v| v.as_str()) == Some("end");
+        all_events.push(event);
+        if is_end {
+            break;
+        }
+    }
+
+    all_events
+}
+
 pub fn build_labeled_image(name: &str) {
     build_labeled_image_with_extra(name, "");
 }
 
 pub fn build_labeled_image_with_extra(name: &str, extra_labels: &str) {
-    let mut dockerfile =
-        "FROM debian:bookworm-slim\nLABEL io.github.kantord.spudkit.version=\"1\"".to_string();
+    // Build on top of spudkit-base so tests use the real dispatcher binary
+    // (with Docker framing for stdout/stderr) rather than duplicating the
+    // dispatch logic here. Requires `just base` to have been run first.
+    let mut dockerfile = "FROM spudkit-base\n".to_string();
     if !extra_labels.is_empty() {
-        dockerfile.push_str(&format!("\n{extra_labels}"));
+        dockerfile.push_str(extra_labels);
+        dockerfile.push('\n');
     }
     let output = std::process::Command::new("docker")
         .args(["build", "-t", name, "-"])
@@ -161,5 +297,8 @@ pub fn build_labeled_image_with_extra(name: &str, extra_labels: &str) {
                 .write_all(dockerfile.as_bytes())?;
             child.wait()
         });
-    assert!(output.is_ok(), "failed to build test image {name}");
+    assert!(
+        output.map(|s| s.success()).unwrap_or(false),
+        "failed to build test image {name}"
+    );
 }

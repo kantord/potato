@@ -114,28 +114,35 @@ impl SpudkitImage {
     pub async fn start(&self) -> anyhow::Result<AppContainer> {
         let docker = Docker::connect_with_local_defaults()?;
 
-        let binds: Vec<String> = self.mounts.iter().map(|m| m.to_bind_string()).collect();
-        let host_config = if binds.is_empty() {
-            None
-        } else {
-            Some(HostConfig {
-                binds: Some(binds),
-                ..Default::default()
-            })
-        };
+        let unique_id = crate::utils::generate_id();
+        let container_name = format!("spudkit-{unique_id}");
+        let exec_socket_dir = PathBuf::from(format!("/tmp/spudkit-exec-{unique_id}"));
+        tokio::fs::create_dir_all(&exec_socket_dir).await?;
+        // Restrict to owner-only so other host processes can't place symlinks
+        // inside the directory before the container's socket is created.
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&exec_socket_dir, std::fs::Permissions::from_mode(0o700))?;
+        }
+
+        let mut binds: Vec<String> = self.mounts.iter().map(|m| m.to_bind_string()).collect();
+        binds.push(format!("{}:/run/spudkit:rw", exec_socket_dir.display()));
+
+        let host_config = Some(HostConfig {
+            binds: Some(binds),
+            ..Default::default()
+        });
 
         let config = ContainerCreateBody {
             image: Some(self.image_name()),
-            cmd: Some(vec!["sleep".to_string(), "infinity".to_string()]),
             host_config,
             ..Default::default()
         };
 
-        let name = format!("spudkit-{}", crate::utils::generate_id());
         let container = docker
             .create_container(
                 Some(CreateContainerOptions {
-                    name: Some(name),
+                    name: Some(container_name),
                     ..Default::default()
                 }),
                 config,
@@ -144,7 +151,20 @@ impl SpudkitImage {
 
         docker.start_container(&container.id, None).await?;
 
-        Ok(AppContainer { id: container.id })
+        let app_container = AppContainer {
+            id: container.id,
+            exec_socket_dir: Some(exec_socket_dir),
+        };
+
+        let ready = app_container
+            .wait_for_exec_socket(std::time::Duration::from_secs(10))
+            .await;
+        if !ready {
+            app_container.stop().await;
+            anyhow::bail!("exec socket did not become ready within 10 seconds");
+        }
+
+        Ok(app_container)
     }
 }
 
@@ -152,12 +172,33 @@ impl SpudkitImage {
 #[derive(Clone)]
 pub struct AppContainer {
     pub id: String,
+    exec_socket_dir: Option<PathBuf>,
 }
 
 /// The attached streams from an exec call.
 pub struct ExecAttached {
     pub output: Pin<Box<dyn Stream<Item = Result<LogOutput, bollard::errors::Error>> + Send>>,
     pub input: Box<dyn tokio::io::AsyncWrite + Send + Unpin>,
+}
+
+/// Read one frame from the dispatcher using Docker's 8-byte framing:
+/// `[stream_type: u8][0x00 0x00 0x00][length: u32 BE][payload]`.
+/// Returns None on EOF or an unknown stream type.
+async fn read_dispatcher_frame<R: tokio::io::AsyncReadExt + Unpin>(
+    reader: &mut R,
+) -> Option<LogOutput> {
+    let mut header = [0u8; 8];
+    reader.read_exact(&mut header).await.ok()?;
+    let stream_type = header[0];
+    let length = u32::from_be_bytes([header[4], header[5], header[6], header[7]]) as usize;
+    let mut payload = vec![0u8; length];
+    reader.read_exact(&mut payload).await.ok()?;
+    let message = bytes::Bytes::from(payload);
+    match stream_type {
+        0x01 => Some(LogOutput::StdOut { message }),
+        0x02 => Some(LogOutput::StdErr { message }),
+        _ => None, // unknown stream type
+    }
 }
 
 impl AppContainer {
@@ -185,7 +226,61 @@ impl AppContainer {
 
         docker.start_container(&container.id, None).await?;
 
-        Ok(Self { id: container.id })
+        Ok(Self {
+            id: container.id,
+            exec_socket_dir: None,
+        })
+    }
+
+    /// Execute a command in the container. Uses the unix socket path if available,
+    /// falling back to docker exec.
+    pub async fn call(&self, cmd: &[String]) -> anyhow::Result<ExecAttached> {
+        if let Some(ref socket_dir) = self.exec_socket_dir {
+            let socket_path = socket_dir.join("exec.sock");
+            let first = cmd.first().map(|s| s.as_str()).unwrap_or("");
+            let script_name = if let Some(name) = first.strip_prefix("/app/bin/") {
+                Some(name)
+            } else if !first.starts_with('/') {
+                Some(first)
+            } else {
+                None
+            };
+            if let Some(name) = script_name
+                && cmd.len() == 1
+                && !name.contains('\n')
+                && !name.contains('\r')
+            {
+                return self.call_via_socket(&socket_path, name).await;
+            }
+        }
+        self.exec(cmd.to_vec()).await
+    }
+
+    async fn call_via_socket(
+        &self,
+        socket_path: &Path,
+        script_name: &str,
+    ) -> anyhow::Result<ExecAttached> {
+        use tokio::io::AsyncWriteExt;
+        use tokio::net::UnixStream;
+
+        let stream = UnixStream::connect(socket_path).await?;
+        let (read_half, mut write_half) = stream.into_split();
+
+        write_half
+            .write_all(format!("{script_name}\n").as_bytes())
+            .await?;
+
+        let output_stream = futures_util::stream::unfold(Some(read_half), |state| async move {
+            let mut reader = state?;
+            let log = read_dispatcher_frame(&mut reader).await?;
+            Some((Ok::<_, bollard::errors::Error>(log), Some(reader)))
+        });
+
+        Ok(ExecAttached {
+            output: Box::pin(output_stream),
+            input: Box::new(write_half),
+        })
     }
 
     /// Execute a command in the container and return attached stdin/stdout/stderr.
@@ -224,7 +319,7 @@ impl AppContainer {
     ) -> anyhow::Result<Vec<String>> {
         use tokio::io::AsyncWriteExt;
 
-        let attached = self.exec(cmd).await?;
+        let attached = self.call(&cmd).await?;
 
         let mut input = attached.input;
         if let Some(data) = stdin_data {
@@ -298,6 +393,22 @@ impl AppContainer {
         }
     }
 
+    /// Wait until the unix exec socket is available, or return false after timeout.
+    pub async fn wait_for_exec_socket(&self, timeout: std::time::Duration) -> bool {
+        let Some(ref socket_dir) = self.exec_socket_dir else {
+            return false;
+        };
+        let socket_path = socket_dir.join("exec.sock");
+        let deadline = std::time::Instant::now() + timeout;
+        while std::time::Instant::now() < deadline {
+            if socket_path.exists() {
+                return true;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        false
+    }
+
     /// Stop and remove the container.
     pub async fn stop(&self) {
         if let Ok(docker) = Docker::connect_with_local_defaults() {
@@ -310,6 +421,9 @@ impl AppContainer {
                     }),
                 )
                 .await;
+        }
+        if let Some(ref dir) = self.exec_socket_dir {
+            let _ = std::fs::remove_dir_all(dir);
         }
     }
 }

@@ -27,6 +27,7 @@ spudkit-core.workspace = true
 minijinja = "=2.19.0"
 dirs = "=6.0.0"
 form_urlencoded = "=1.2.2"
+bytes = "=1.11.1"
 
 [dev-dependencies]
 hyper = "=1.9.0"

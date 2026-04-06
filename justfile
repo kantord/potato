@@ -10,8 +10,12 @@ build: polyfill
 test:
     cargo test
 
+# Build the spudkit base image
+base:
+    docker build -t spudkit-base images/base
+
 # Build all Docker images
-images:
+images: base
     docker build -t spud-hello-world images/hello-world
     docker build -t spud-hello-simple images/hello-simple
     docker build -t spud-book-search images/book-search
