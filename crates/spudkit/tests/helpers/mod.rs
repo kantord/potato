@@ -127,12 +127,6 @@ pub async fn app_via_socket_with_script(
     let mut output = attached.output;
     while output.next().await.is_some() {}
 
-    // Wait for the s6-ipcserver socket to be ready
-    let ready = container
-        .wait_for_exec_socket(std::time::Duration::from_secs(10))
-        .await;
-    assert!(ready, "exec socket never became ready");
-
     spudkit::app_router(container)
 }
 

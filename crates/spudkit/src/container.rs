@@ -151,10 +151,20 @@ impl SpudkitImage {
 
         docker.start_container(&container.id, None).await?;
 
-        Ok(AppContainer {
+        let app_container = AppContainer {
             id: container.id,
             exec_socket_dir: Some(exec_socket_dir),
-        })
+        };
+
+        let ready = app_container
+            .wait_for_exec_socket(std::time::Duration::from_secs(10))
+            .await;
+        if !ready {
+            app_container.stop().await;
+            anyhow::bail!("exec socket did not become ready within 10 seconds");
+        }
+
+        Ok(app_container)
     }
 }
 
@@ -169,6 +179,26 @@ pub struct AppContainer {
 pub struct ExecAttached {
     pub output: Pin<Box<dyn Stream<Item = Result<LogOutput, bollard::errors::Error>> + Send>>,
     pub input: Box<dyn tokio::io::AsyncWrite + Send + Unpin>,
+}
+
+/// Read one frame from the dispatcher binary's stdout using Docker's 8-byte
+/// multiplexing protocol: [stream_type: u8][0x00 0x00 0x00][length: u32 BE][payload].
+/// Returns None on EOF or an unknown stream type, ending the output stream.
+async fn read_dispatcher_frame<R: tokio::io::AsyncReadExt + Unpin>(
+    reader: &mut R,
+) -> Option<LogOutput> {
+    let mut header = [0u8; 8];
+    reader.read_exact(&mut header).await.ok()?;
+    let stream_type = header[0];
+    let length = u32::from_be_bytes([header[4], header[5], header[6], header[7]]) as usize;
+    let mut payload = vec![0u8; length];
+    reader.read_exact(&mut payload).await.ok()?;
+    let message = bytes::Bytes::from(payload);
+    match stream_type {
+        0x01 => Some(LogOutput::StdOut { message }),
+        0x02 => Some(LogOutput::StdErr { message }),
+        _ => None, // unknown stream type
+    }
 }
 
 impl AppContainer {
@@ -220,11 +250,7 @@ impl AppContainer {
                 && !name.contains('\n')
                 && !name.contains('\r')
             {
-                // Try the socket path; fall back to exec on any connection error
-                // (e.g. socket not yet created, TOCTOU between check and connect).
-                if let Ok(attached) = self.call_via_socket(&socket_path, name).await {
-                    return Ok(attached);
-                }
+                return self.call_via_socket(&socket_path, name).await;
             }
         }
         self.exec(cmd.to_vec()).await
@@ -235,7 +261,7 @@ impl AppContainer {
         socket_path: &Path,
         script_name: &str,
     ) -> anyhow::Result<ExecAttached> {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::io::AsyncWriteExt;
         use tokio::net::UnixStream;
 
         let stream = UnixStream::connect(socket_path).await?;
@@ -245,29 +271,9 @@ impl AppContainer {
             .write_all(format!("{script_name}\n").as_bytes())
             .await?;
 
-        // Parse Docker's 8-byte framing protocol emitted by the dispatcher binary:
-        //   [stream_type: u8][0x00 0x00 0x00][length: u32 BE][payload]
-        // stream_type 0x01 = stdout, 0x02 = stderr.
-        // This is the same format Docker uses for exec attach, so LogOutput variants
-        // map directly and the rest of the call pipeline needs no changes.
         let output_stream = futures_util::stream::unfold(Some(read_half), |state| async move {
             let mut reader = state?;
-            let mut header = [0u8; 8];
-            if reader.read_exact(&mut header).await.is_err() {
-                return None;
-            }
-            let stream_type = header[0];
-            let length = u32::from_be_bytes([header[4], header[5], header[6], header[7]]) as usize;
-            let mut payload = vec![0u8; length];
-            if reader.read_exact(&mut payload).await.is_err() {
-                return None;
-            }
-            let message = bytes::Bytes::from(payload);
-            let log = match stream_type {
-                0x01 => LogOutput::StdOut { message },
-                0x02 => LogOutput::StdErr { message },
-                _ => return None, // unknown stream type — skip frame
-            };
+            let log = read_dispatcher_frame(&mut reader).await?;
             Some((Ok::<_, bollard::errors::Error>(log), Some(reader)))
         });
 
