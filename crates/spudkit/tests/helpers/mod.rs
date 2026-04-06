@@ -93,6 +93,49 @@ pub async fn app_with_script_and_template(
     spudkit::app_router(container)
 }
 
+/// Build an app router that goes through the unix socket path (not docker exec).
+/// `image_name` must be unique per test to avoid conflicts.
+pub async fn app_via_socket_with_script(
+    image_name: &str,
+    script_name: &str,
+    script_content: &str,
+) -> axum::Router {
+    build_labeled_image(image_name);
+
+    let spud =
+        spudkit_core::Spud::new(image_name.strip_prefix("spud-").unwrap_or(image_name)).unwrap();
+    let image = spudkit::container::SpudkitImage::from_spud(spud)
+        .await
+        .expect("failed to validate image");
+    let container = image.start().await.expect("failed to start container");
+
+    // Install the script into the running container
+    let install_cmd = vec![
+        "/bin/sh".to_string(),
+        "-c".to_string(),
+        format!(
+            "mkdir -p /app/bin && cat > /app/bin/{script_name} && chmod +x /app/bin/{script_name}"
+        ),
+    ];
+    let attached = container.exec(install_cmd).await.unwrap();
+    use futures_util::StreamExt;
+    use tokio::io::AsyncWriteExt;
+    let mut input = attached.input;
+    input.write_all(script_content.as_bytes()).await.unwrap();
+    input.shutdown().await.unwrap();
+    drop(input);
+    let mut output = attached.output;
+    while output.next().await.is_some() {}
+
+    // Wait for the s6-ipcserver socket to be ready
+    let ready = container
+        .wait_for_exec_socket(std::time::Duration::from_secs(10))
+        .await;
+    assert!(ready, "exec socket never became ready");
+
+    spudkit::app_router(container)
+}
+
 pub fn parse_sse_events(body: &str) -> Vec<serde_json::Value> {
     body.lines()
         .filter(|line| line.starts_with("data:"))
@@ -237,21 +280,13 @@ pub fn build_labeled_image(name: &str) {
 }
 
 pub fn build_labeled_image_with_extra(name: &str, extra_labels: &str) {
-    let mut dockerfile = concat!(
-        "FROM debian:bookworm-slim\n",
-        "LABEL io.github.kantord.spudkit.version=\"1\"\n",
-        "RUN apt-get update && apt-get install -y --no-install-recommends s6",
-        " && rm -rf /var/lib/apt/lists/*\n",
-        "RUN mkdir -p /app/gui /app/bin /app/templates /run/spudkit\n",
-        "RUN printf '#!/bin/sh\\nread -r cmd\\ncase \"$cmd\" in\\n",
-        "  */*|*..*)  exit 1 ;;\\nesac\\nexec \"/app/bin/$cmd\"\\n'",
-        " > /usr/local/bin/dispatch && chmod +x /usr/local/bin/dispatch\n",
-        "CMD [\"s6-ipcserver\", \"-P\", \"-c\", \"200\",",
-        " \"/run/spudkit/exec.sock\", \"/usr/local/bin/dispatch\"]",
-    )
-    .to_string();
+    // Build on top of spudkit-base so tests use the real dispatcher binary
+    // (with Docker framing for stdout/stderr) rather than duplicating the
+    // dispatch logic here. Requires `just base` to have been run first.
+    let mut dockerfile = "FROM spudkit-base\n".to_string();
     if !extra_labels.is_empty() {
-        dockerfile.push_str(&format!("\n{extra_labels}"));
+        dockerfile.push_str(extra_labels);
+        dockerfile.push('\n');
     }
     let output = std::process::Command::new("docker")
         .args(["build", "-t", name, "-"])

@@ -225,7 +225,7 @@ impl AppContainer {
         socket_path: &Path,
         script_name: &str,
     ) -> anyhow::Result<ExecAttached> {
-        use tokio::io::AsyncWriteExt;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
         use tokio::net::UnixStream;
 
         let stream = UnixStream::connect(socket_path).await?;
@@ -235,20 +235,29 @@ impl AppContainer {
             .write_all(format!("{script_name}\n").as_bytes())
             .await?;
 
+        // Parse Docker's 8-byte framing protocol emitted by the dispatcher binary:
+        //   [stream_type: u8][0x00 0x00 0x00][length: u32 BE][payload]
+        // stream_type 0x01 = stdout, 0x02 = stderr.
+        // This is the same format Docker uses for exec attach, so LogOutput variants
+        // map directly and the rest of the call pipeline needs no changes.
         let output_stream = futures_util::stream::unfold(Some(read_half), |state| async move {
-            use tokio::io::AsyncReadExt;
             let mut reader = state?;
-            let mut buf = vec![0u8; 4096];
-            match reader.read(&mut buf).await {
-                Ok(0) | Err(_) => None,
-                Ok(n) => {
-                    buf.truncate(n);
-                    let log = LogOutput::StdOut {
-                        message: bytes::Bytes::from(buf),
-                    };
-                    Some((Ok::<_, bollard::errors::Error>(log), Some(reader)))
-                }
+            let mut header = [0u8; 8];
+            if reader.read_exact(&mut header).await.is_err() {
+                return None;
             }
+            let stream_type = header[0];
+            let length = u32::from_be_bytes([header[4], header[5], header[6], header[7]]) as usize;
+            let mut payload = vec![0u8; length];
+            if reader.read_exact(&mut payload).await.is_err() {
+                return None;
+            }
+            let message = bytes::Bytes::from(payload);
+            let log = match stream_type {
+                0x02 => LogOutput::StdErr { message },
+                _ => LogOutput::StdOut { message },
+            };
+            Some((Ok::<_, bollard::errors::Error>(log), Some(reader)))
         });
 
         Ok(ExecAttached {
@@ -365,6 +374,22 @@ impl AppContainer {
                 anyhow::bail!("exec started in detached mode")
             }
         }
+    }
+
+    /// Wait until the unix exec socket is available, or return false after timeout.
+    pub async fn wait_for_exec_socket(&self, timeout: std::time::Duration) -> bool {
+        let Some(ref socket_dir) = self.exec_socket_dir else {
+            return false;
+        };
+        let socket_path = socket_dir.join("exec.sock");
+        let deadline = std::time::Instant::now() + timeout;
+        while std::time::Instant::now() < deadline {
+            if socket_path.exists() {
+                return true;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        false
     }
 
     /// Stop and remove the container.
