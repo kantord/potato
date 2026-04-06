@@ -10,4 +10,5 @@ FROM spudkit-base
 RUN apt-get update && apt-get install -y bc && rm -rf /var/lib/apt/lists/*
 COPY --from=frontend /build/dist/ /app/gui/
 COPY calculate.sh /app/bin/calculate.sh
-RUN chmod +x /app/bin/calculate.sh
+COPY calculate-loop.sh /app/bin/calculate-loop.sh
+RUN chmod +x /app/bin/calculate.sh /app/bin/calculate-loop.sh

@@ -4,6 +4,18 @@ use axum::response::{IntoResponse, Response};
 
 use super::super::state::AppState;
 
+const POLYFILL: &str = include_str!("../../../polyfill.js");
+
+fn inject_polyfill(html: &[u8]) -> Vec<u8> {
+    let html_str = String::from_utf8_lossy(html);
+    let script = format!("<script>{POLYFILL}</script>");
+    if let Some(pos) = html_str.to_lowercase().rfind("</body>") {
+        format!("{}{}{}", &html_str[..pos], script, &html_str[pos..]).into_bytes()
+    } else {
+        format!("{html_str}{script}").into_bytes()
+    }
+}
+
 async fn serve_file(state: &AppState, path: &str) -> Response {
     let container = state.container.clone();
     let container_path = match crate::utils::resolve_container_path("/app/gui", path) {
@@ -16,7 +28,12 @@ async fn serve_file(state: &AppState, path: &str) -> Response {
             let mime = mime_guess::from_path(path)
                 .first_or_octet_stream()
                 .to_string();
-            ([(axum::http::header::CONTENT_TYPE, mime)], bytes).into_response()
+            let body = if mime.starts_with("text/html") {
+                inject_polyfill(&bytes)
+            } else {
+                bytes
+            };
+            ([(axum::http::header::CONTENT_TYPE, mime)], body).into_response()
         }
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(e) => (

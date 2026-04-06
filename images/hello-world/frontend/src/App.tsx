@@ -55,6 +55,61 @@ async function runCommand(
   }
 }
 
+async function openPersistentCall(cmd: string[]): Promise<{
+  callId: string;
+  waitForOutput: () => Promise<unknown>;
+  close: () => void;
+}> {
+  const res = await fetch("/_api/calls", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cmd }),
+  });
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  const waiters: Array<(data: unknown) => void> = [];
+  const buffered: unknown[] = [];
+  let resolveStarted: (id: string) => void;
+  const startedPromise = new Promise<string>((r) => { resolveStarted = r; });
+
+  (async () => {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        const json = line.slice(5).trim();
+        if (!json) continue;
+        try {
+          const msg = JSON.parse(json);
+          if (msg.event === "started" && msg.data?.call_id) {
+            resolveStarted!(msg.data.call_id);
+          } else if (msg.event === "output") {
+            if (waiters.length > 0) waiters.shift()!(msg.data);
+            else buffered.push(msg.data);
+          }
+        } catch {}
+      }
+    }
+  })();
+
+  const callId = await startedPromise;
+  return {
+    callId,
+    waitForOutput: () =>
+      new Promise((resolve) => {
+        if (buffered.length > 0) resolve(buffered.shift());
+        else waiters.push(resolve);
+      }),
+    close: () => reader.cancel(),
+  };
+}
+
 function App() {
   const [a, setA] = useState("0");
   const [b, setB] = useState("0");
@@ -70,6 +125,27 @@ function App() {
         setResult(`Result: ${d.result}`);
       }
     });
+  }
+
+  async function benchmarkLoop() {
+    setResult("Benchmarking (loop)...");
+    const rounds = 100;
+    const call = await openPersistentCall(["calculate-loop.sh"]);
+    const times: number[] = [];
+    for (let i = 0; i < rounds; i++) {
+      const start = performance.now();
+      fetch(`/_api/calls/${call.callId}/stdin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: { a: 2, b: 3, op: "add" } }),
+      });
+      await call.waitForOutput();
+      times.push(performance.now() - start);
+      if (i % 20 === 0) setResult(`Benchmarking (loop)... ${i + 1}/${rounds}`);
+    }
+    call.close();
+    const avg = times.reduce((a, b) => a + b, 0) / times.length;
+    setResult(`${rounds} rounds (loop) — ${(1000 / avg).toFixed(1)} req/s, ${avg.toFixed(1)}ms avg`);
   }
 
   async function benchmark() {
@@ -116,6 +192,9 @@ function App() {
         <Button onClick={() => calc("multiply")}>Multiply</Button>
         <Button variant="secondary" onClick={benchmark}>
           Benchmark
+        </Button>
+        <Button variant="secondary" onClick={benchmarkLoop}>
+          Benchmark (loop)
         </Button>
       </div>
       {result && <p className="text-2xl">{result}</p>}
