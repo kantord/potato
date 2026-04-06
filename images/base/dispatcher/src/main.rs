@@ -56,11 +56,22 @@ fn reader_thread(mut reader: impl Read + Send + 'static, tag: u8, tx: mpsc::Send
 
 fn main() {
     // Read the script name from the first line of stdin.
-    let mut stdin_bytes = std::io::stdin();
+    //
+    // IMPORTANT: do NOT use std::io::stdin() here. Rust's Stdin wraps fd 0 in
+    // a BufReader (8 KB buffer), so the first read() call drains the entire
+    // kernel socket buffer into userspace. If the caller sends stdin data
+    // before we've spawned the child, that data ends up stuck in our buffer
+    // and the child — which inherits the raw fd 0 — never sees it, hanging
+    // forever. We read directly from fd 0 with no buffering so every byte we
+    // consume is exactly one kernel read(), leaving the rest for the child.
+    let mut stdin_raw = std::mem::ManuallyDrop::new(unsafe {
+        use std::os::fd::FromRawFd;
+        std::fs::File::from_raw_fd(0)
+    });
     let mut cmd = String::new();
     let mut byte = [0u8; 1];
     loop {
-        match stdin_bytes.read(&mut byte) {
+        match stdin_raw.read(&mut byte) {
             Ok(0) | Err(_) => std::process::exit(1),
             Ok(_) => {
                 if byte[0] == b'\n' {
