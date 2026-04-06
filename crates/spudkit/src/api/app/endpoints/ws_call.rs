@@ -102,12 +102,12 @@ async fn handle_socket(ws: WebSocket, state: AppState) {
                 let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&text) else {
                     continue;
                 };
-                if parsed.get("type").and_then(|v| v.as_str()) == Some("stdin") {
-                    if let Some(data) = parsed.get("data") {
-                        let line = serde_json::to_string(data).unwrap() + "\n";
-                        if input.write_all(line.as_bytes()).await.is_err() {
-                            break;
-                        }
+                if parsed.get("type").and_then(|v| v.as_str()) == Some("stdin")
+                    && let Some(data) = parsed.get("data")
+                {
+                    let line = serde_json::to_string(data).unwrap() + "\n";
+                    if input.write_all(line.as_bytes()).await.is_err() {
+                        break;
                     }
                 }
             }
