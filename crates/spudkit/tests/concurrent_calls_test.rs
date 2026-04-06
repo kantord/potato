@@ -44,7 +44,7 @@ async fn concurrent_calls_produce_independent_output(#[future] app: axum::Router
         assert_eq!(
             output_events[0]["data"],
             serde_json::json!({"id": i}),
-            "call {i} got wrong data back — calls may have mixed up stdin"
+            "call {i} got wrong data back (calls may have mixed up stdin)"
         );
     }
 }

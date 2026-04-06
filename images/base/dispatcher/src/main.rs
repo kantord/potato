@@ -1,9 +1,7 @@
 // Dispatcher: called by s6-ipcserver for each incoming unix socket connection.
 //
-// Why this binary exists
-// ----------------------
-// s6-ipcserver connects a single socket fd to the child's stdin AND stdout.
-// That means the child's stderr has nowhere to go — it is silently discarded.
+// s6-ipcserver connects a single socket fd to the child's stdin AND stdout,
+// so the child's stderr has nowhere to go and is silently discarded.
 // This binary wraps the child process, capturing stdout and stderr on separate
 // pipes, then multiplexes both into a single framed stream on its own stdout
 // using Docker's 8-byte header format:
@@ -13,12 +11,11 @@
 // stream_type: 0x01 = stdout, 0x02 = stderr
 //
 // The host-side reader (call_via_socket in container.rs) parses these frames
-// and emits the appropriate LogOutput::StdOut / LogOutput::StdErr variants,
-// so callers see stderr as "error" SSE events instead of losing it entirely.
+// and emits LogOutput::StdOut / LogOutput::StdErr, so stderr shows up as
+// "error" SSE events rather than being dropped.
 //
-// Two reader threads + mpsc channel serialize stdout and stderr chunks without
-// any external dependencies. The channel acts as the ordering primitive — there
-// is no race between the two streams.
+// Two reader threads + mpsc channel handle the multiplexing. The channel
+// serializes chunks from both streams so there's no ordering race.
 
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
@@ -61,7 +58,7 @@ fn main() {
     // a BufReader (8 KB buffer), so the first read() call drains the entire
     // kernel socket buffer into userspace. If the caller sends stdin data
     // before we've spawned the child, that data ends up stuck in our buffer
-    // and the child — which inherits the raw fd 0 — never sees it, hanging
+    // and the child (which inherits the raw fd 0) never sees it, hanging
     // forever. We read directly from fd 0 with no buffering so every byte we
     // consume is exactly one kernel read(), leaving the rest for the child.
     let mut stdin_raw = std::mem::ManuallyDrop::new(unsafe {

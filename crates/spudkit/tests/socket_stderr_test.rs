@@ -1,9 +1,7 @@
-//! Tests that prove stderr is propagated correctly through the unix socket path.
+//! Tests that stderr is propagated correctly through the unix socket path.
 //!
-//! These tests use `SpudkitImage::start()` so that `exec_socket_dir` is set
-//! and `AppContainer::call()` routes through `call_via_socket()`. The socket
-//! path currently drops stderr silently — these tests are expected to FAIL
-//! until proper framing is implemented.
+//! These use `SpudkitImage::start()` so that `exec_socket_dir` is set and
+//! `AppContainer::call()` routes through `call_via_socket()`.
 
 #[allow(dead_code)]
 mod helpers;
@@ -26,7 +24,6 @@ async fn socket_path_propagates_stderr() {
 
     let events = non_started_events(call_and_get_events(app, vec!["stderr-only"]).await);
 
-    // Should have an "error" event — currently FAILS because socket path drops stderr
     let error_events: Vec<_> = events.iter().filter(|e| e["event"] == "error").collect();
 
     assert!(
@@ -55,7 +52,6 @@ async fn socket_path_preserves_both_stdout_and_stderr() {
         "expected at least one 'output' event from stdout"
     );
 
-    // Currently FAILS because socket path drops stderr
     assert!(
         !error_events.is_empty(),
         "expected at least one 'error' SSE event from stderr, but got none. events: {events:?}"

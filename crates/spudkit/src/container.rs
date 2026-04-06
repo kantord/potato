@@ -181,9 +181,9 @@ pub struct ExecAttached {
     pub input: Box<dyn tokio::io::AsyncWrite + Send + Unpin>,
 }
 
-/// Read one frame from the dispatcher binary's stdout using Docker's 8-byte
-/// multiplexing protocol: [stream_type: u8][0x00 0x00 0x00][length: u32 BE][payload].
-/// Returns None on EOF or an unknown stream type, ending the output stream.
+/// Read one frame from the dispatcher using Docker's 8-byte framing:
+/// `[stream_type: u8][0x00 0x00 0x00][length: u32 BE][payload]`.
+/// Returns None on EOF or an unknown stream type.
 async fn read_dispatcher_frame<R: tokio::io::AsyncReadExt + Unpin>(
     reader: &mut R,
 ) -> Option<LogOutput> {
@@ -232,8 +232,8 @@ impl AppContainer {
         })
     }
 
-    /// Execute a command in the container via the fast unix socket path if available,
-    /// falling back to docker exec otherwise.
+    /// Execute a command in the container. Uses the unix socket path if available,
+    /// falling back to docker exec.
     pub async fn call(&self, cmd: &[String]) -> anyhow::Result<ExecAttached> {
         if let Some(ref socket_dir) = self.exec_socket_dir {
             let socket_path = socket_dir.join("exec.sock");
