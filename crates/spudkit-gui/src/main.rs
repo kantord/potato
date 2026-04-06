@@ -29,6 +29,20 @@ async fn forward(
     String::from_utf8(response).map_err(|e| format!("invalid response: {e}"))
 }
 
+/// Send stdin data to a running call.
+#[tauri::command]
+async fn send_stdin(
+    state: tauri::State<'_, AppState>,
+    call_id: String,
+    data: serde_json::Value,
+) -> Result<(), String> {
+    state
+        .0
+        .send_stdin(&call_id, &data)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// Generic stream: send a request and stream events back via Channel.
 #[tauri::command]
 async fn stream(
@@ -89,7 +103,7 @@ fn main() {
                     .expect("valid HTTP response"),
             }
         })
-        .invoke_handler(tauri::generate_handler![forward, stream])
+        .invoke_handler(tauri::generate_handler![forward, stream, send_stdin])
         .setup(move |tauri_app| {
             tauri_app.manage(AppState(app));
 

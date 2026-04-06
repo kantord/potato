@@ -127,6 +127,27 @@ function App() {
     });
   }
 
+  async function benchmarkNoop() {
+    setResult("Benchmarking (noop)...");
+    const rounds = 200;
+    const call = await openPersistentCall(["noop-loop.sh"]);
+    const times: number[] = [];
+    for (let i = 0; i < rounds; i++) {
+      const start = performance.now();
+      fetch(`/_api/calls/${call.callId}/stdin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: {} }),
+      });
+      await call.waitForOutput();
+      times.push(performance.now() - start);
+      if (i % 50 === 0) setResult(`Benchmarking (noop)... ${i + 1}/${rounds}`);
+    }
+    call.close();
+    const avg = times.reduce((a, b) => a + b, 0) / times.length;
+    setResult(`${rounds} rounds (noop) — ${(1000 / avg).toFixed(1)} req/s, ${avg.toFixed(1)}ms avg`);
+  }
+
   async function benchmarkLoop() {
     setResult("Benchmarking (loop)...");
     const rounds = 100;
@@ -195,6 +216,9 @@ function App() {
         </Button>
         <Button variant="secondary" onClick={benchmarkLoop}>
           Benchmark (loop)
+        </Button>
+        <Button variant="secondary" onClick={benchmarkNoop}>
+          Benchmark (noop)
         </Button>
       </div>
       {result && <p className="text-2xl">{result}</p>}

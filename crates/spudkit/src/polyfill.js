@@ -1,4 +1,10 @@
 (function () {
+  // In Tauri the page runs under a custom scheme with no TCP server, so
+  // WebSocket connections to /_api/stdin-ws are not possible.  Detect Tauri
+  // early and skip the WebSocket path entirely; MSW (loaded as an
+  // initialization_script) will intercept the native fetch call instead.
+  if (typeof window.__TAURI__ !== "undefined") return;
+
   let socket = null;
   let connecting = null;
 
