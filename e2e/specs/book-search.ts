@@ -1,8 +1,8 @@
-describe("Book Search App", () => {
+describe("Live Grep App", () => {
   it("loads and shows the title", async () => {
     const heading = await $("h1");
     await heading.waitForDisplayed({ timeout: 10000 });
-    expect(await heading.getText()).toBe("Book Search");
+    expect(await heading.getText()).toBe("Live Grep");
   });
 
   it("shows subtitle mentioning Alice", async () => {
@@ -10,20 +10,14 @@ describe("Book Search App", () => {
     expect(await subtitle.getText()).toContain("Alice");
   });
 
-  it("has a search input and button", async () => {
+  it("has a search input", async () => {
     const input = await $("input[name='query']");
     expect(await input.isDisplayed()).toBe(true);
-
-    const button = await $("button=Search");
-    expect(await button.isDisplayed()).toBe(true);
   });
 
   it("finds results for 'rabbit'", async () => {
     const input = await $("input[name='query']");
     await input.setValue("rabbit");
-
-    const button = await $("button=Search");
-    await button.click();
 
     await browser.waitUntil(
       async () => {
@@ -39,9 +33,6 @@ describe("Book Search App", () => {
     const input = await $("input[name='query']");
     await input.setValue("queen");
 
-    const button = await $("button=Search");
-    await button.click();
-
     await browser.waitUntil(
       async () => {
         const results = await $("#results");
@@ -56,9 +47,6 @@ describe("Book Search App", () => {
     const input = await $("input[name='query']");
     await input.setValue("xyzzyflurbo");
 
-    const button = await $("button=Search");
-    await button.click();
-
     await browser.waitUntil(
       async () => {
         const results = await $("#results");
@@ -67,14 +55,15 @@ describe("Book Search App", () => {
       },
       { timeout: 10000, timeoutMsg: "expected results to update" }
     );
+
+    const results = await $("#results");
+    const text = await results.getText();
+    expect(text.toLowerCase()).not.toContain("xyzzyflurbo");
   });
 
   it("is case insensitive", async () => {
     const input = await $("input[name='query']");
     await input.setValue("ALICE");
-
-    const button = await $("button=Search");
-    await button.click();
 
     await browser.waitUntil(
       async () => {

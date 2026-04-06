@@ -297,5 +297,8 @@ pub fn build_labeled_image_with_extra(name: &str, extra_labels: &str) {
                 .write_all(dockerfile.as_bytes())?;
             child.wait()
         });
-    assert!(output.is_ok(), "failed to build test image {name}");
+    assert!(
+        output.map(|s| s.success()).unwrap_or(false),
+        "failed to build test image {name}"
+    );
 }
