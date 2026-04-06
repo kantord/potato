@@ -28,7 +28,7 @@ pub(crate) async fn handler(
 
     tokio::spawn(async move {
         let resolved_cmd = crate::utils::resolve_cmd(&body.cmd);
-        let attached = match container.exec(resolved_cmd).await {
+        let attached = match container.call(&resolved_cmd).await {
             Ok(a) => a,
             Err(e) => return stream.error(&format!("failed to exec: {e}")).await,
         };

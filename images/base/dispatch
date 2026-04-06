@@ -1,0 +1,8 @@
+#!/bin/sh
+read -r cmd
+case "$cmd" in
+  */*|*..*)
+    exit 1
+    ;;
+esac
+exec "/app/bin/$cmd"

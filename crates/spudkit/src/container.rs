@@ -114,28 +114,29 @@ impl SpudkitImage {
     pub async fn start(&self) -> anyhow::Result<AppContainer> {
         let docker = Docker::connect_with_local_defaults()?;
 
-        let binds: Vec<String> = self.mounts.iter().map(|m| m.to_bind_string()).collect();
-        let host_config = if binds.is_empty() {
-            None
-        } else {
-            Some(HostConfig {
-                binds: Some(binds),
-                ..Default::default()
-            })
-        };
+        let unique_id = crate::utils::generate_id();
+        let container_name = format!("spudkit-{unique_id}");
+        let exec_socket_dir = PathBuf::from(format!("/tmp/spudkit-exec-{unique_id}"));
+        std::fs::create_dir_all(&exec_socket_dir)?;
+
+        let mut binds: Vec<String> = self.mounts.iter().map(|m| m.to_bind_string()).collect();
+        binds.push(format!("{}:/run/spudkit:rw", exec_socket_dir.display()));
+
+        let host_config = Some(HostConfig {
+            binds: Some(binds),
+            ..Default::default()
+        });
 
         let config = ContainerCreateBody {
             image: Some(self.image_name()),
-            cmd: Some(vec!["sleep".to_string(), "infinity".to_string()]),
             host_config,
             ..Default::default()
         };
 
-        let name = format!("spudkit-{}", crate::utils::generate_id());
         let container = docker
             .create_container(
                 Some(CreateContainerOptions {
-                    name: Some(name),
+                    name: Some(container_name),
                     ..Default::default()
                 }),
                 config,
@@ -144,7 +145,10 @@ impl SpudkitImage {
 
         docker.start_container(&container.id, None).await?;
 
-        Ok(AppContainer { id: container.id })
+        Ok(AppContainer {
+            id: container.id,
+            exec_socket_dir: Some(exec_socket_dir),
+        })
     }
 }
 
@@ -152,6 +156,7 @@ impl SpudkitImage {
 #[derive(Clone)]
 pub struct AppContainer {
     pub id: String,
+    exec_socket_dir: Option<PathBuf>,
 }
 
 /// The attached streams from an exec call.
@@ -185,7 +190,71 @@ impl AppContainer {
 
         docker.start_container(&container.id, None).await?;
 
-        Ok(Self { id: container.id })
+        Ok(Self {
+            id: container.id,
+            exec_socket_dir: None,
+        })
+    }
+
+    /// Execute a command in the container via the fast unix socket path if available,
+    /// falling back to docker exec otherwise.
+    pub async fn call(&self, cmd: &[String]) -> anyhow::Result<ExecAttached> {
+        if let Some(ref socket_dir) = self.exec_socket_dir {
+            let socket_path = socket_dir.join("exec.sock");
+            if socket_path.exists() {
+                let first = cmd.first().map(|s| s.as_str()).unwrap_or("");
+                let script_name = if let Some(name) = first.strip_prefix("/app/bin/") {
+                    Some(name)
+                } else if !first.starts_with('/') {
+                    Some(first)
+                } else {
+                    None
+                };
+                if let Some(name) = script_name
+                    && cmd.len() == 1
+                {
+                    return self.call_via_socket(&socket_path, name).await;
+                }
+            }
+        }
+        self.exec(cmd.to_vec()).await
+    }
+
+    async fn call_via_socket(
+        &self,
+        socket_path: &Path,
+        script_name: &str,
+    ) -> anyhow::Result<ExecAttached> {
+        use tokio::io::AsyncWriteExt;
+        use tokio::net::UnixStream;
+
+        let stream = UnixStream::connect(socket_path).await?;
+        let (read_half, mut write_half) = stream.into_split();
+
+        write_half
+            .write_all(format!("{script_name}\n").as_bytes())
+            .await?;
+
+        let output_stream = futures_util::stream::unfold(Some(read_half), |state| async move {
+            use tokio::io::AsyncReadExt;
+            let mut reader = state?;
+            let mut buf = vec![0u8; 4096];
+            match reader.read(&mut buf).await {
+                Ok(0) | Err(_) => None,
+                Ok(n) => {
+                    buf.truncate(n);
+                    let log = LogOutput::StdOut {
+                        message: bytes::Bytes::from(buf),
+                    };
+                    Some((Ok::<_, bollard::errors::Error>(log), Some(reader)))
+                }
+            }
+        });
+
+        Ok(ExecAttached {
+            output: Box::pin(output_stream),
+            input: Box::new(write_half),
+        })
     }
 
     /// Execute a command in the container and return attached stdin/stdout/stderr.
@@ -310,6 +379,9 @@ impl AppContainer {
                     }),
                 )
                 .await;
+        }
+        if let Some(ref dir) = self.exec_socket_dir {
+            let _ = std::fs::remove_dir_all(dir);
         }
     }
 }

@@ -237,8 +237,19 @@ pub fn build_labeled_image(name: &str) {
 }
 
 pub fn build_labeled_image_with_extra(name: &str, extra_labels: &str) {
-    let mut dockerfile =
-        "FROM debian:bookworm-slim\nLABEL io.github.kantord.spudkit.version=\"1\"".to_string();
+    let mut dockerfile = concat!(
+        "FROM debian:bookworm-slim\n",
+        "LABEL io.github.kantord.spudkit.version=\"1\"\n",
+        "RUN apt-get update && apt-get install -y --no-install-recommends s6",
+        " && rm -rf /var/lib/apt/lists/*\n",
+        "RUN mkdir -p /app/gui /app/bin /app/templates /run/spudkit\n",
+        "RUN printf '#!/bin/sh\\nread -r cmd\\ncase \"$cmd\" in\\n",
+        "  */*|*..*)  exit 1 ;;\\nesac\\nexec \"/app/bin/$cmd\"\\n'",
+        " > /usr/local/bin/dispatch && chmod +x /usr/local/bin/dispatch\n",
+        "CMD [\"s6-ipcserver\", \"-P\", \"-c\", \"200\",",
+        " \"/run/spudkit/exec.sock\", \"/usr/local/bin/dispatch\"]",
+    )
+    .to_string();
     if !extra_labels.is_empty() {
         dockerfile.push_str(&format!("\n{extra_labels}"));
     }
