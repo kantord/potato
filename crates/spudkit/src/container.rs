@@ -117,7 +117,7 @@ impl SpudkitImage {
         let unique_id = crate::utils::generate_id();
         let container_name = format!("spudkit-{unique_id}");
         let exec_socket_dir = PathBuf::from(format!("/tmp/spudkit-exec-{unique_id}"));
-        std::fs::create_dir_all(&exec_socket_dir)?;
+        tokio::fs::create_dir_all(&exec_socket_dir).await?;
 
         let mut binds: Vec<String> = self.mounts.iter().map(|m| m.to_bind_string()).collect();
         binds.push(format!("{}:/run/spudkit:rw", exec_socket_dir.display()));

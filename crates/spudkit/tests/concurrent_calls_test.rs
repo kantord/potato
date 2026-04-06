@@ -80,7 +80,7 @@ async fn concurrent_calls_all_complete(#[future] app: axum::Router) {
 
 #[rstest]
 #[tokio::test]
-async fn concurrent_calls_without_stdin_are_isolated(#[future] app: axum::Router) {
+async fn concurrent_calls_via_exec_are_isolated(#[future] app: axum::Router) {
     let app = app.await;
 
     let handles: Vec<_> = (0..5)
