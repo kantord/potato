@@ -302,7 +302,7 @@ impl AppContainer {
     ) -> anyhow::Result<Vec<String>> {
         use tokio::io::AsyncWriteExt;
 
-        let attached = self.exec(cmd).await?;
+        let attached = self.call(&cmd).await?;
 
         let mut input = attached.input;
         if let Some(data) = stdin_data {

@@ -2,24 +2,28 @@
 <html data-theme="dark">
 <head>
     <meta charset="utf-8">
-    <title>Book Search</title>
+    <title>Live Grep</title>
     <link rel="stylesheet" href="/pico.min.css">
     <script src="/htmx.min.js"></script>
 </head>
 <body>
     <main class="container">
-        <h1>Book Search</h1>
+        <h1>Live Grep</h1>
         <p><em>Search through Alice's Adventures in Wonderland by Lewis Carroll</em></p>
 
-        <form hx-post="/_api/render/search.sh" hx-target="#results" hx-indicator="#loading">
-            <fieldset role="group">
-                <input type="text" name="query" placeholder="Search for a word or phrase..." autofocus />
-                <button type="submit">Search</button>
-            </fieldset>
-        </form>
+        <input
+            type="text"
+            name="query"
+            placeholder="Type to search..."
+            autofocus
+            hx-post="/_api/render/search.sh"
+            hx-target="#results"
+            hx-indicator="#loading"
+            hx-trigger="input delay:150ms"
+        />
 
         <p id="loading" aria-busy="true" class="htmx-indicator">Searching...</p>
-        <section id="results">Type a search term and press Search.</section>
+        <section id="results">Start typing to search.</section>
     </main>
 </body>
 </html>
