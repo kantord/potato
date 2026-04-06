@@ -17,7 +17,6 @@ pub fn app_router(container: AppContainer) -> Router {
     };
     Router::new()
         .route("/_api/calls", post(endpoints::call::handler))
-        .route("/_api/calls/ws", get(endpoints::ws_call::handler))
         .route("/_api/calls/{id}/stdin", post(endpoints::stdin::handler))
         .route("/_api/stdin-ws", get(endpoints::ws_stdin::handler))
         .route("/_api/render/{script}", post(endpoints::render::handler))
