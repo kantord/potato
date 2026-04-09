@@ -1,3 +1,5 @@
+mod build;
+
 use clap::{Parser, Subcommand};
 use spudkit_client::{SpudkitClient, SseEvent};
 use std::io::BufRead;
@@ -11,6 +13,15 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Build a spud image and tag it as `spud-<name>`
+    Build {
+        /// Image tag or spud name
+        #[arg(short = 't', long = "tag", value_name = "TAG")]
+        tag: String,
+        /// Build context path
+        #[arg(value_name = "PATH")]
+        path: std::path::PathBuf,
+    },
     /// Run a command inside a spud
     Run {
         /// Name of the spud
@@ -32,6 +43,7 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     match args.command {
+        Command::Build { tag, path } => build::run(&tag, &path).await,
         Command::Run { app, command } => run(&app, command).await,
         Command::App { name } => app(&name),
         Command::Ls => ls().await,

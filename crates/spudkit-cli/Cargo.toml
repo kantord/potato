@@ -2,7 +2,7 @@
 name = "spudkit-cli"
 version.workspace = true
 edition = "2024"
-description = "Run spuds in the CLI"
+description = "Build and run spuds from the CLI"
 license.workspace = true
 repository.workspace = true
 
@@ -19,8 +19,15 @@ serde_json = "=1.0.149"
 anyhow = "=1.0.102"
 clap = { version = "=4.6.0", features = ["derive"] }
 spudkit-client.workspace = true
+spudkit-core.workspace = true
 tokio = { version = "1.51.0", features = ["rt-multi-thread", "macros", "io-std"] }
 which = "=8.0.2"
+tar = "0.4"
+walkdir = "2"
+bollard = "=0.20.2"
+futures-util = "=0.3.32"
 
 [dev-dependencies]
 rstest.workspace = true
+tar = "0.4"
+tempfile = "3"

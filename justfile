@@ -16,9 +16,9 @@ base:
 
 # Build all Docker images
 images: base
-    docker build -t spud-hello-world images/hello-world
-    docker build -t spud-hello-simple images/hello-simple
-    docker build -t spud-book-search images/book-search
+    spud build -t hello-world images/hello-world
+    spud build -t hello-simple images/hello-simple
+    spud build -t book-search images/book-search
 
 # Build the hello-world frontend (requires pnpm)
 frontend:

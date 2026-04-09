@@ -175,7 +175,7 @@ RUN chmod +x /app/bin/search.sh
 Build and run:
 
 ```sh
-docker build -t book-search .
+spud build -t book-search .
 spud-app book-search
 ```
 
