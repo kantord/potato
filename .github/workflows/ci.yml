@@ -41,7 +41,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
-          node-version: 24.14.1
+          node-version: 24.15.0
 
       - name: Build polyfill
         run: cd crates/spudkit-gui && pnpm install && pnpm build
@@ -82,7 +82,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
-          node-version: 24.14.1
+          node-version: 24.15.0
 
       - name: Build polyfill
         run: cd crates/spudkit-gui && pnpm install && pnpm build
@@ -126,7 +126,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
-          node-version: 24.14.1
+          node-version: 24.15.0
           cache: pnpm
           cache-dependency-path: e2e/pnpm-lock.yaml
 
